@@ -11,6 +11,7 @@ Kebutuhan:
 
 import os
 import sys
+import select
 import time
 import threading
 import subprocess
@@ -22,7 +23,7 @@ import paho.mqtt.client as mqtt
 # ================================================================
 MQTT_BROKER  = "127.0.0.1"
 MQTT_PORT    = 1883
-DEVICE_NAME  = "PR200V2-2551110318791"   # ganti sesuai topic nyata
+DEVICE_NAME  = "PR200V2-2551110318791"  # confirmed dari mosquitto_sub Pi
 
 TOPIC_SOC    = f"bluetti/state/{DEVICE_NAME}/total_battery_percent"
 TOPIC_PV     = f"bluetti/state/{DEVICE_NAME}/dc_input_power"
@@ -30,6 +31,10 @@ TOPIC_AC_OUT = f"bluetti/state/{DEVICE_NAME}/ac_output_power"
 TOPIC_GRID_V = f"bluetti/state/{DEVICE_NAME}/ac_input_voltage"
 TOPIC_AC_ON  = f"bluetti/state/{DEVICE_NAME}/ac_output_on"
 TOPIC_CMD    = f"bluetti/command/{DEVICE_NAME}/ac_output_on"
+TOPIC_CHG    = f"bluetti/state/{DEVICE_NAME}/total_battery_charge_time"
+TOPIC_DCHG   = f"bluetti/state/{DEVICE_NAME}/total_battery_discharge_time"
+
+TIME_BALANCE_W = 10  # Watt threshold: selisih < ini = BALANCE
 
 LOG_FILE      = os.path.expanduser("~/bluetti_log.txt")
 LAST_RULE_FILE= os.path.expanduser("~/bluetti_last_rule.txt")
@@ -95,13 +100,38 @@ def color_automation():
     if ok:  return green("ACTIVE")
     return red("INACTIVE")
 
+def color_time_rem():
+    """Hitung dan format TIME REM berdasarkan PV vs LOAD."""
+    with state_lock:
+        pv       = state["pv"]
+        ac_out   = state["ac_out"]
+        chg_time = state["chg_time"]
+    if chg_time is None:
+        return dim("--")
+    try:
+        pv_w   = float(pv)
+        load_w = float(ac_out)
+    except (ValueError, TypeError):
+        return dim("--")
+    mins = chg_time
+    h = mins // 60
+    m = mins % 60
+    time_str = f"{h}j {m}m" if h > 0 else f"{m}m"
+    diff = pv_w - load_w
+    if diff > TIME_BALANCE_W:
+        return green(f"{time_str} ↑")
+    elif diff < -TIME_BALANCE_W:
+        return red(f"{time_str} ↓")
+    else:
+        return dim("--")
+
+
 def soc_bar(val):
     try:
         v = int(float(val))
         filled = v // 10
         empty  = 10 - filled
-        bar = "█" * filled + "░" * empty
-        return bar
+        return "█" * filled + "░" * empty
     except:
         return "░" * 10
 
@@ -111,7 +141,8 @@ def soc_bar(val):
 state = {
     "soc": "--", "pv": "--", "ac_out": "--",
     "grid_v": "--", "ac_on": "--",
-    "last_ts": None,   # epoch float
+    "chg_time": None,
+    "last_ts": None,
     "mqtt_ok": False,
 }
 state_lock = threading.Lock()
@@ -135,6 +166,7 @@ def on_connect(client, userdata, flags, rc):
         client.subscribe([
             (TOPIC_SOC, 0), (TOPIC_PV, 0), (TOPIC_AC_OUT, 0),
             (TOPIC_GRID_V, 0), (TOPIC_AC_ON, 0),
+            (TOPIC_CHG, 0), (TOPIC_DCHG, 0),
         ])
 
 def on_disconnect(client, userdata, rc):
@@ -151,6 +183,8 @@ def on_message(client, userdata, msg):
             elif topic == TOPIC_PV:   state["pv"]     = f"{val:.0f}"
             elif topic == TOPIC_AC_OUT: state["ac_out"] = f"{val:.0f}"
             elif topic == TOPIC_GRID_V: state["grid_v"] = f"{val:.1f}"
+            elif topic in (TOPIC_CHG, TOPIC_DCHG):
+                state["chg_time"] = int(val)
         except ValueError:
             if topic == TOPIC_AC_ON:
                 state["ac_on"] = payload.upper()
@@ -276,6 +310,7 @@ def render_header(indicator=None):
     lines.append("")
     lines.append(f"TIME         : {cyan(now)}")
     lines.append(f"SOC          : {color_soc(soc)}   {soc_bar(soc)}")
+    lines.append(f"TIME REM     : {color_time_rem()}")
     lines.append(f"PV           : {pv}W")
     lines.append(f"LOAD         : {ac_out}W")
     lines.append(f"GRID         : {color_grid(grid_v)}")
@@ -283,7 +318,7 @@ def render_header(indicator=None):
     lines.append(f"MQTT         : {mqtt_status}")
     lines.append(f"DATA         : {data_status}")
     lines.append(f"LAST UPDATE  : {last_upd}")
-    lines.append(f"DESALVO      : {desalvo_status} ({uptime})")
+    lines.append(f"BLE SVC      : {desalvo_status} ({uptime})")
     lines.append(f"AUTOMATION   : {auto_status}")
     lines.append(f"RULE LAST    : {dim(rule_last)}")
     lines.append("")
@@ -306,7 +341,7 @@ def render_menu():
     lines.append(f"  {cyan('1.')} Monitor realtime")
     lines.append(f"  {cyan('2.')} Show automation log")
     lines.append(f"  {cyan('3.')} {ac_label}")
-    lines.append(f"  {cyan('4.')} Restart desalvo")
+    lines.append(f"  {cyan('4.')} Restart Bluetti service")
     lines.append(f"  {cyan('5.')} Restart automation")
     lines.append(f"  {cyan('6.')} Pause automation")
     lines.append(f"  {cyan('7.')} Resume automation")
@@ -384,6 +419,7 @@ def monitor_realtime():
             print(bold("================================="))
             print()
             print(f"  SOC    : {color_soc(soc)}   {soc_bar(soc)}")
+            print(f"  TIME   : {color_time_rem()}")
             print(f"  PV     : {pv}W")
             print(f"  LOAD   : {ac_out}W")
             print(f"  GRID   : {color_grid(grid_v)}")
@@ -393,15 +429,11 @@ def monitor_realtime():
             stale = is_stale()
             data_ind = red("⚠ STALE") if stale else green("● FRESH")
             print(dim(f"  {data_ind} · interval {REALTIME_REFRESH}s"))
-            print(cyan("  [0] Kembali ke menu"))
+            print(dim("  [Enter] kembali ke menu"))
 
-            # cek input tiap 0.1 detik
-            for _ in range(int(REALTIME_REFRESH * 10)):
-                import select
-                if select.select([sys.stdin], [], [], 0.1)[0]:
-                    cmd = sys.stdin.readline().strip()
-                    if cmd == "0":
-                        return
+            if select.select([sys.stdin], [], [], REALTIME_REFRESH)[0]:
+                input()
+                break
     except KeyboardInterrupt:
         pass
     finally:
@@ -621,12 +653,13 @@ def main():
                 break
             elif choice == "1":
                 monitor_realtime()
+                continue
             elif choice == "2":
                 show_log()
             elif choice == "3":
                 toggle_ac()
             elif choice == "4":
-                restart_service("bluetti", "Desalvo",
+                restart_service("bluetti", "Bluetti service",
                                 "BLE putus sesaat")
             elif choice == "5":
                 restart_service("automation", "Automation",

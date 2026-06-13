@@ -1,0 +1,15 @@
+[Unit]
+Description=Bluetti History Logger
+After=network.target mosquitto.service bluetti.service
+Wants=bluetti.service
+
+[Service]
+User=wahyu
+WorkingDirectory=/home/wahyu
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/wahyu/bluetti-desalvo/bin/python /home/wahyu/history_logger.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

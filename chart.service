@@ -1,0 +1,14 @@
+[Unit]
+Description=Bluetti Chart Server
+After=network.target
+
+[Service]
+User=wahyu
+WorkingDirectory=/home/wahyu
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/wahyu/bluetti-desalvo/bin/python /home/wahyu/chart_server.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
