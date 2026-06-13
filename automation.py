@@ -247,7 +247,7 @@ def check_rules():
     # Tanpa guard PLN → A5 melumpuhkan A6 saat PLN mati malam
     # ────────────────────────────────────────────────────────────
     if (is_nighttime()
-            and soc < 71
+            and soc < 61
             and ac_is_on()
             and grid_v is not None
             and grid_v > 180          # Guard PLN: hanya saat grid normal
