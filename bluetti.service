@@ -1,0 +1,15 @@
+[Unit]
+Description=Bluetti MQTT Daemon
+After=network.target mosquitto.service bluetooth.service
+Wants=bluetooth.service
+
+[Service]
+User=wahyu
+WorkingDirectory=/home/wahyu
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/wahyu/bluetti-desalvo/bin/bluetti-mqtt "DC:B4:D9:52:18:6A" --broker localhost
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
