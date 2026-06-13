@@ -9,7 +9,7 @@ WorkingDirectory=/home/wahyu
 Environment=PYTHONUNBUFFERED=1
 ExecStart=/home/wahyu/bluetti-desalvo/bin/bluetti-mqtt "DC:B4:D9:52:18:6A" --broker localhost
 Restart=always
-RestartSec=10
+RestartSec=30
 
 [Install]
 WantedBy=multi-user.target
