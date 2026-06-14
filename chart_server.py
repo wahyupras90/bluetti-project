@@ -601,13 +601,12 @@ body{background:#0f172a;color:#e2e8f0;font-family:'Courier New',monospace;min-he
 
   <!-- TOMBOL AC -->
   <button class="btn-ac" id="btn-ac" onclick="showAcModal()">--</button>
+  <button class="btn-ac" onclick="showSystemPopup()" style="background:#1e3a5f;color:#e0f2fe;border:1px solid #0ea5e9;margin-bottom:8px">🖥️ System Status</button>
 
   <!-- TOMBOL AUTOMATION -->
   <button class="btn-pause" onclick="showModal('pause')">⏸ Pause automation</button>
   <button class="btn-pause" onclick="showModal('resume')">▶ Resume automation</button>
 
-  <!-- SYSTEM STATUS BUTTON -->
-  <button class="sys-btn" onclick="showSystemPopup()">🖥️ System Status</button>
 
   <!-- LOG -->
   <div class="log-box" id="log-box">
