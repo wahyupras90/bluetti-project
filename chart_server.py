@@ -428,18 +428,19 @@ HTML = r"""<!DOCTYPE html>
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bluetti</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#0f172a;color:#e2e8f0;font-family:'Courier New',monospace;min-height:100vh}
+body{background:#0f172a;color:#e2e8f0;font-family:'JetBrains Mono',monospace;min-height:100vh}
 
 /* TAB NAV */
 .tab-nav{display:flex;border-bottom:1px solid #1e293b;background:#0f172a;position:sticky;top:0;z-index:10}
-.tab-btn{flex:1;padding:12px 0;font-family:'Courier New',monospace;font-size:13px;
+.tab-btn{flex:1;padding:12px 0;font-family:'JetBrains Mono',monospace;font-size:13px;
   background:none;border:none;color:#475569;cursor:pointer;letter-spacing:1px;
   border-bottom:2px solid transparent;transition:all 0.15s}
 .tab-btn.active{color:#e2e8f0;border-bottom-color:#0ea5e9}
@@ -452,17 +453,17 @@ body{background:#0f172a;color:#e2e8f0;font-family:'Courier New',monospace;min-he
 .status-row{display:flex;justify-content:space-between;align-items:center;
   padding:6px 0;border-bottom:1px solid #0f172a;font-size:13px}
 .status-row:last-child{border-bottom:none}
-.status-label{color:#e2e8f0;font-size:11px;letter-spacing:1px}
+.status-label{color:#ffffff;font-size:14px;font-weight:700;letter-spacing:1px}
 .status-value{font-weight:bold}
 .soc-bar{height:4px;background:#0f172a;border-radius:2px;margin-top:4px;overflow:hidden}
 .soc-fill{height:100%;border-radius:2px;transition:width 0.5s}
 
 /* TOMBOL */
 .btn-ac{width:100%;padding:14px;border-radius:8px;border:none;
-  font-family:'Courier New',monospace;font-size:14px;font-weight:bold;
+  font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:bold;
   cursor:pointer;margin-bottom:8px;letter-spacing:1px;transition:all 0.15s}
 .btn-pause{width:100%;padding:11px;border-radius:8px;border:1px solid #334155;
-  background:#1e293b;color:#94a3b8;font-family:'Courier New',monospace;
+  background:#1e293b;color:#94a3b8;font-family:'JetBrains Mono',monospace;
   font-size:12px;cursor:pointer;margin-bottom:6px;transition:all 0.15s}
 .btn-pause:hover{border-color:#0ea5e9;color:#e0f2fe}
 
@@ -475,7 +476,7 @@ body{background:#0f172a;color:#e2e8f0;font-family:'Courier New',monospace;min-he
 
 /* SYSTEM POPUP */
 .sys-btn{width:100%;padding:11px;border-radius:8px;border:1px solid #334155;
-  background:#1e293b;color:#94a3b8;font-family:'Courier New',monospace;
+  background:#1e293b;color:#94a3b8;font-family:'JetBrains Mono',monospace;
   font-size:12px;cursor:pointer;margin-bottom:6px;letter-spacing:1px}
 .sys-btn:hover{border-color:#0ea5e9;color:#e0f2fe}
 .sys-row{display:flex;justify-content:space-between;padding:6px 0;
@@ -483,7 +484,7 @@ body{background:#0f172a;color:#e2e8f0;font-family:'Courier New',monospace;min-he
 .sys-row:last-child{border-bottom:none}
 .sys-label{color:#94a3b8}
 .reboot-btn{width:100%;padding:11px;border-radius:8px;border:none;
-  background:#7f1d1d;color:#fca5a5;font-family:'Courier New',monospace;
+  background:#7f1d1d;color:#fca5a5;font-family:'JetBrains Mono',monospace;
   font-size:13px;font-weight:bold;cursor:pointer;margin-top:12px}
 .reboot-btn:hover{background:#991b1b}
 
@@ -497,14 +498,14 @@ body{background:#0f172a;color:#e2e8f0;font-family:'Courier New',monospace;min-he
 .modal-info{font-size:14px;margin-bottom:16px;color:#e2e8f0}
 .modal-btns{display:flex;gap:8px}
 .modal-cancel{flex:1;padding:10px;border-radius:6px;border:1px solid #334155;
-  background:#0f172a;color:#94a3b8;font-family:'Courier New',monospace;cursor:pointer}
+  background:#0f172a;color:#94a3b8;font-family:'JetBrains Mono',monospace;cursor:pointer}
 .modal-confirm{flex:1;padding:10px;border-radius:6px;border:none;
-  font-family:'Courier New',monospace;font-weight:bold;cursor:pointer}
+  font-family:'JetBrains Mono',monospace;font-weight:bold;cursor:pointer}
 
 /* CHART TAB */
 .period-row{display:flex;gap:8px;margin-bottom:12px}
 .btn-period{flex:1;padding:8px 0;border:1px solid #334155;background:#1e293b;
-  color:#94a3b8;border-radius:6px;font-family:'Courier New',monospace;font-size:13px;cursor:pointer}
+  color:#94a3b8;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:13px;cursor:pointer}
 .btn-period.active{background:#0f4c75;border-color:#0ea5e9;color:#e0f2fe;font-weight:bold}
 .filter-row{display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap}
 .filter-item{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px}
@@ -531,7 +532,7 @@ body{background:#0f172a;color:#e2e8f0;font-family:'Courier New',monospace;min-he
 .health-note{font-size:10px;color:#94a3b8;margin-top:8px;line-height:1.5}
 .reset-btn{display:block;width:100%;margin-top:10px;padding:8px;
   background:#1e293b;border:1px solid #334155;color:#94a3b8;
-  border-radius:6px;font-family:'Courier New',monospace;font-size:12px;cursor:pointer}
+  border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:12px;cursor:pointer}
 
 /* COLORS */
 .green{color:#22c55e}.red{color:#ef4444}.yellow{color:#eab308}
