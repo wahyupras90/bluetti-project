@@ -1,16 +1,7 @@
 #!/usr/bin/env python3
 """
 automation.py — Bluetti Elite 200 V2 Automation
-7 rule deterministik, tanpa Home Assistant
-
-Jalankan: python3 automation.py
-Service : automation.service (systemd)
-
-Keputusan desain:
-  A2 menang di boundary 40% (proteksi baterai > backup)
-  A5 dua guard: malam + PLN ada (tidak melumpuhkan A6 saat outage)
-  A6 SOC > 41 (gap dengan A2, tidak overlap)
-  Interval polling 60s produksi, 30s debug
+v3.1 - Smart Recovery Tiered, Exceptions Fixed, Stateless Guard
 """
 
 import os
@@ -20,11 +11,11 @@ from datetime import datetime
 import paho.mqtt.client as mqtt
 
 # ================================================================
-# KONFIGURASI — sesuaikan sebelum deploy
+# KONFIGURASI
 # ================================================================
 MQTT_BROKER  = "127.0.0.1"
 MQTT_PORT    = 1883
-DEVICE_NAME  = "PR200V2-2551110318791"  # confirmed dari mosquitto_sub Pi
+DEVICE_NAME  = "PR200V2-2551110318791"
 
 TOPIC_SOC    = f"bluetti/state/{DEVICE_NAME}/total_battery_percent"
 TOPIC_PV     = f"bluetti/state/{DEVICE_NAME}/dc_input_power"
@@ -37,345 +28,172 @@ LOG_FILE       = os.path.expanduser("~/bluetti_log.txt")
 LAST_RULE_FILE = os.path.expanduser("~/bluetti_last_rule.txt")
 PAUSE_FLAG     = "/tmp/automation_paused"
 
-DEBOUNCE_SEC   = 120   # jeda minimum antar trigger rule yang sama
+DEBOUNCE_SEC   = 120
 
 # ================================================================
-# LOGGING KE STDOUT (ditangkap systemd journalctl)
+# LOGGING
 # ================================================================
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s",
-    datefmt="%H:%M:%S"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
 log = logging.getLogger(__name__)
 
 # ================================================================
-# STATE
+# STATE & TIMERS
 # ================================================================
 state = {
-    "soc":     None,   # float %
-    "pv":      None,   # float W
-    "ac_out":  None,   # float W
-    "grid_v":  None,   # float V
-    "ac_on":   None,   # "ON" / "OFF"
+    "soc": None, "pv": None, "ac_out": None, "grid_v": None, "ac_on": None,
 }
 
-# Timer A4 (solar lemah 5 menit)
-_a4_timer_start = None
-_a4_fired       = False
+_last_trigger = {f"A{i}": 0.0 for i in ["1", "1b", "2", "3", "4_pagi", "4_siang", "5", "6", "7"]}
+_timers = {"A2": None, "A4_siang": None, "A7": None}
 
-# Debounce: waktu terakhir tiap rule trigger
-_last_trigger = {f"A{i}": 0.0 for i in range(1, 8)}
+def now_sec(): return time.time()
+def ac_is_on(): return state["ac_on"] == "ON"
+def ac_is_off(): return state["ac_on"] != "ON"
+def debounce_ok(rule): return (now_sec() - _last_trigger[rule]) > DEBOUNCE_SEC
+def is_paused(): return os.path.exists(PAUSE_FLAG)
 
-# ================================================================
-# HELPER
-# ================================================================
-def now_sec():
-    return time.time()
+def is_time_range(start_str, end_str):
+    now_str = datetime.now().strftime("%H:%M")
+    if start_str <= end_str:
+        return start_str <= now_str < end_str
+    return start_str <= now_str or now_str < end_str
 
-def hms():
-    return datetime.now().strftime("%H:%M:%S")
-
-def hour():
-    return datetime.now().hour
-
-def is_daytime():
-    """Siang: 09:00 – 16:00"""
-    h = hour()
-    return 9 <= h < 16
-
-def is_nighttime():
-    """Malam: 16:00 – 09:00"""
-    h = hour()
-    return h >= 16 or h < 9
-
-def ac_is_on():
-    return state["ac_on"] == "ON"
-
-def ac_is_off():
-    return state["ac_on"] == "OFF"
-
-def debounce_ok(rule):
-    return (now_sec() - _last_trigger[rule]) > DEBOUNCE_SEC
-
-def mark(rule):
-    _last_trigger[rule] = now_sec()
-
-def is_paused():
-    return os.path.exists(PAUSE_FLAG)
+def check_timer(rule, condition, duration_sec):
+    if condition:
+        if _timers[rule] is None:
+            _timers[rule] = now_sec()
+        if (now_sec() - _timers[rule]) >= duration_sec:
+            return True
+    else:
+        _timers[rule] = None
+    return False
 
 def write_log(rule_id, rule_name, detail_lines, action):
-    """
-    Tulis ke file log DAN stdout.
-    Format:
-      [HH:MM:SS] A1 PAGI ON
-        SOC=63%  AC=OFF
-        → AC ON
-    """
-    ts = hms()
+    ts = datetime.now().strftime("%H:%M:%S")
     header = f"[{ts}] {rule_id} {rule_name}"
-
-    # Stdout (ditangkap journalctl)
     log.info(header)
-    for line in detail_lines:
-        log.info(f"  {line}")
+    for line in detail_lines: log.info(f"  {line}")
     log.info(f"  → {action}")
-
-    # File log (dibaca menu.py opsi 2)
     try:
         with open(LOG_FILE, "a") as f:
-            f.write(f"{header}\n")
-            for line in detail_lines:
-                f.write(f"  {line}\n")
-            f.write(f"  → {action}\n")
-            f.write("\n")
-    except Exception as e:
-        log.warning(f"Gagal tulis log: {e}")
-
-    # Last rule file (dibaca menu.py header RULE LAST)
-    try:
-        short_time = datetime.now().strftime("%H:%M")
+            f.write(f"{header}\n" + "\n".join([f"  {l}" for l in detail_lines]) + f"\n  → {action}\n\n")
         with open(LAST_RULE_FILE, "w") as f:
-            f.write(f"{rule_id} {rule_name} {short_time}\n")
+            f.write(f"{rule_id} {rule_name} {datetime.now().strftime('%H:%M')}\n")
     except Exception as e:
-        log.warning(f"Gagal tulis last_rule: {e}")
+        log.warning(f"File log error: {e}")
 
-# ================================================================
-# MQTT PUBLISH
-# ================================================================
 _client = None
-
 def send_ac(value):
-    """value: 'ON' atau 'OFF'"""
+    global state
+    state["ac_on"] = value
     if _client:
         _client.publish(TOPIC_CMD, value)
         log.info(f"  CMD → AC {value}")
 
+def trigger(rule_id, name, details, action, val):
+    write_log(rule_id, name, details, action)
+    send_ac(val)
+    _last_trigger[rule_id] = now_sec()
+
 # ================================================================
-# 7 RULE AUTOMATION
+# EVALUASI RULE
 # ================================================================
 def check_rules():
-    global _a4_timer_start, _a4_fired
+    if is_paused(): return
+    if datetime.now().year < 2026:
+        log.warning("JAM TIDAK VALID — belum sync NTP, otomasi dibekukan")
+        return
+    soc, pv, ac_out, grid = state["soc"], state["pv"], state["ac_out"], state["grid_v"]
+    if soc is None: return
 
-    if is_paused():
+    is_malam = is_time_range("15:30", "06:00")
+
+    # 1. PROTEKSI ABSOLUT
+    if check_timer("A2", soc <= 40, 30):
+        if ac_is_on() and debounce_ok("A2"):
+            trigger("A2", "PROTEKSI BATERAI", [f"SOC={soc:.0f}% stabil 30s"], "AC OFF", "OFF")
         return
 
-    soc    = state["soc"]
-    pv     = state["pv"]
-    ac_out = state["ac_out"]
-    grid_v = state["grid_v"]
-
-    # Minimal butuh SOC untuk bisa berjalan
-    if soc is None:
+    # 2. FASE MALAM / OUTAGE
+    if grid is not None and grid < 200 and is_malam and soc >= 41:
+        if ac_is_off() and debounce_ok("A6"):
+            trigger("A6", "PLN MATI MALAM", [f"GRID={grid:.0f}V", f"SOC={soc:.0f}%"], "AC ON", "ON")
         return
 
-    # ────────────────────────────────────────────────────────────
-    # A2 — SOC Rendah AC OFF
-    # Proteksi baterai, MENANG atas semua (tidak ada guard PLN)
-    # Threshold: SOC < 41, gap dengan A6 (>41) di SOC=40
-    # ────────────────────────────────────────────────────────────
-    if soc < 41 and ac_is_on() and debounce_ok("A2"):
-        write_log(
-            "A2", "SOC RENDAH",
-            [f"SOC={soc:.0f}%  AC=ON"],
-            "AC OFF (proteksi baterai)"
-        )
-        send_ac("OFF")
-        mark("A2")
-        # Reset A4 timer karena AC sudah off
-        _a4_timer_start = None
-        _a4_fired       = False
-        return  # A2 menang, stop cek rule lain
-
-    # ────────────────────────────────────────────────────────────
-    # A6 — PLN Mati AC ON
-    # SOC > 41 (gap: A2 menang di 40, A6 tidak aktif di 40)
-    # ────────────────────────────────────────────────────────────
-    if (grid_v is not None
-            and grid_v < 50
-            and soc > 41
-            and ac_is_off()
-            and debounce_ok("A6")):
-        write_log(
-            "A6", "PLN MATI",
-            [f"GRID={grid_v:.0f}V  SOC={soc:.0f}%"],
-            "AC ON (backup rumah)"
-        )
-        send_ac("ON")
-        mark("A6")
+    if check_timer("A7", grid is not None and grid >= 215 and is_malam and ac_is_on(), 30):
+        if debounce_ok("A7"):
+            trigger("A7", "PLN HIDUP KEMBALI", [f"GRID={grid:.0f}V stabil 30s"], "AC OFF", "OFF")
         return
 
-    # ────────────────────────────────────────────────────────────
-    # A7 — PLN Hidup AC OFF (malam)
-    # Hanya jalan malam + PLN kembali setelah outage (A6 pernah trigger)
-    # ────────────────────────────────────────────────────────────
-    if (grid_v is not None
-            and grid_v > 180
-            and ac_is_on()
-            and is_nighttime()
-            and _last_trigger["A6"] > 0
-            and (now_sec() - _last_trigger["A6"]) < 3600
-            and debounce_ok("A7")):
-        write_log(
-            "A7", "PLN HIDUP",
-            [f"GRID={grid_v:.0f}V  malam"],
-            "AC OFF"
-        )
-        send_ac("OFF")
-        mark("A7")
+    if is_malam and soc < 61:
+        grid_aman = (grid is None or grid >= 200)
+        if ac_is_on() and debounce_ok("A5") and grid_aman:
+            trigger("A5", "STANDBY MALAM", [f"SOC={soc:.0f}% < 61%"], "AC OFF", "OFF")
         return
 
-    # ────────────────────────────────────────────────────────────
-    # A1 — Pagi AC ON (jam 09:00)
-    # ────────────────────────────────────────────────────────────
-    if (hour() == 9
-            and soc >= 60
-            and ac_is_off()
-            and debounce_ok("A1")):
-        write_log(
-            "A1", "PAGI ON",
-            [f"SOC={soc:.0f}%  AC=OFF  jam 09:xx"],
-            "AC ON"
-        )
-        send_ac("ON")
-        mark("A1")
+    # 3. KICKSTART PAGI
+    if is_time_range("06:00", "06:05") and soc >= 65:
+        if ac_is_off() and debounce_ok("A1b"):
+            trigger("A1b", "KICKSTART JAM 6", [f"SOC={soc:.0f}% (>= 65)"], "AC ON", "ON")
         return
 
-    # ────────────────────────────────────────────────────────────
-    # A5 — Standby Malam AC OFF
-    # DUA GUARD: (1) malam saja, (2) PLN ada (tidak saat outage)
-    # Tanpa guard PLN → A5 melumpuhkan A6 saat PLN mati malam
-    # ────────────────────────────────────────────────────────────
-    if (is_nighttime()
-            and soc < 61
-            and ac_is_on()
-            and grid_v is not None
-            and grid_v > 180          # Guard PLN: hanya saat grid normal
-            and debounce_ok("A5")):
-        write_log(
-            "A5", "STANDBY MALAM",
-            [f"SOC={soc:.0f}%  GRID={grid_v:.0f}V  malam"],
-            "AC OFF"
-        )
-        send_ac("OFF")
-        mark("A5")
+    if is_time_range("07:00", "07:05") and (45 < soc < 65):
+        if ac_is_off() and debounce_ok("A1"):
+            trigger("A1", "KICKSTART JAM 7", [f"SOC={soc:.0f}% (46 - 64)"], "AC ON", "ON")
         return
 
-    # ────────────────────────────────────────────────────────────
-    # A3 — Recovery AC ON (siang, SOC pulih + solar cukup)
-    # ────────────────────────────────────────────────────────────
-    if (is_daytime()
-            and soc >= 60
-            and ac_is_off()
-            and pv is not None
-            and pv > 50
-            and debounce_ok("A3")):
-        write_log(
-            "A3", "RECOVERY",
-            [f"SOC={soc:.0f}%  PV={pv:.0f}W  AC=OFF"],
-            "AC ON"
-        )
-        send_ac("ON")
-        mark("A3")
+    # 4. FASE SIANG: PEMUTUS (OFF)
+    if is_time_range("06:30", "11:30") and soc <= 45:
+        if ac_is_on() and debounce_ok("A4_pagi"):
+            trigger("A4_pagi", "BUFFER PAGI OFF", [f"SOC={soc:.0f}% <= 45%"], "AC OFF", "OFF")
         return
 
-    # ────────────────────────────────────────────────────────────
-    # A4 — Solar Lemah AC OFF (kondisi bertahan 5 menit)
-    # Cek: PV < LOAD dan SOC <= 60 selama 5 menit berturutan
-    # ────────────────────────────────────────────────────────────
-    if (is_daytime()
-            and ac_is_on()
-            and pv is not None
-            and ac_out is not None
-            and pv < ac_out
-            and soc <= 60):
-        if _a4_timer_start is None:
-            _a4_timer_start = now_sec()
-            log.info(f"A4 timer mulai: PV={pv:.0f}W LOAD={ac_out:.0f}W SOC={soc:.0f}%")
-
-        elapsed = now_sec() - _a4_timer_start
-        if elapsed >= 300 and not _a4_fired and debounce_ok("A4"):
-            mins = int(elapsed // 60)
-            secs = int(elapsed % 60)
-            write_log(
-                "A4", "SOLAR LEMAH",
-                [f"PV={pv:.0f}W  LOAD={ac_out:.0f}W  SOC={soc:.0f}%",
-                 f"durasi={mins}m{secs:02d}s"],
-                "AC OFF"
-            )
-            send_ac("OFF")
-            mark("A4")
-            _a4_fired = True
+    if is_time_range("11:30", "15:30") and ac_is_on() and (pv is not None) and (ac_out is not None):
+        a4_siang_cond = (soc <= 60) and (pv < ac_out)
+        if check_timer("A4_siang", a4_siang_cond, 900):
+            if debounce_ok("A4_siang"):
+                trigger("A4_siang", "SMART TRANSITION OFF", [f"SOC={soc:.0f}% <= 60%", f"PV={pv:.0f}W < LOAD={ac_out:.0f}W"], "AC OFF", "OFF")
+            return
     else:
-        # Kondisi tidak terpenuhi → reset timer
-        if _a4_timer_start is not None:
-            log.info("A4 timer reset (kondisi tidak lagi terpenuhi)")
-        _a4_timer_start = None
-        _a4_fired       = False
+        check_timer("A4_siang", False, 900)
+
+    # 5. FASE SIANG: RECOVERY (ON)
+    if is_time_range("06:30", "15:30"):
+        a3_cond = False
+        if is_time_range("06:30", "11:30"):
+            a3_cond = (soc > 65)
+        else:
+            a3_cond = (soc > 65 and pv is not None and pv > 200) or (soc > 75)
+        if a3_cond:
+            if ac_is_off() and debounce_ok("A3"):
+                trigger("A3", "RECOVERY SIANG", [f"SOC={soc:.0f}%"], "AC ON", "ON")
+            return
 
 # ================================================================
 # MQTT CALLBACKS
 # ================================================================
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
-        log.info(f"MQTT terhubung ke {MQTT_BROKER}:{MQTT_PORT}")
-        client.subscribe([
-            (TOPIC_SOC,    0),
-            (TOPIC_PV,     0),
-            (TOPIC_AC_OUT, 0),
-            (TOPIC_GRID_V, 0),
-            (TOPIC_AC_ON,  0),
-        ])
-        log.info(f"Subscribe: {DEVICE_NAME}")
-    else:
-        log.error(f"MQTT gagal konek rc={rc}")
-
-def on_disconnect(client, userdata, rc):
-    log.warning(f"MQTT terputus rc={rc}, reconnect otomatis...")
+        client.subscribe([(TOPIC_SOC,0), (TOPIC_PV,0), (TOPIC_AC_OUT,0), (TOPIC_GRID_V,0), (TOPIC_AC_ON,0)])
+        log.info(f"Connected & Subscribed to {DEVICE_NAME}")
 
 def on_message(client, userdata, msg):
-    topic   = msg.topic
-    payload = msg.payload.decode().strip()
-
     try:
-        val = float(payload)
-        if topic == TOPIC_SOC:
-            state["soc"]    = val
-        elif topic == TOPIC_PV:
-            state["pv"]     = val
-        elif topic == TOPIC_AC_OUT:
-            state["ac_out"] = val
-        elif topic == TOPIC_GRID_V:
-            state["grid_v"] = val
+        val = float(msg.payload.decode().strip())
+        if msg.topic == TOPIC_SOC: state["soc"] = val
+        elif msg.topic == TOPIC_PV: state["pv"] = val
+        elif msg.topic == TOPIC_AC_OUT: state["ac_out"] = val
+        elif msg.topic == TOPIC_GRID_V: state["grid_v"] = val
     except ValueError:
-        if topic == TOPIC_AC_ON:
-            state["ac_on"] = payload.upper()
-
-    # Cek rule setiap kali data masuk
+        if msg.topic == TOPIC_AC_ON: state["ac_on"] = msg.payload.decode().strip().upper()
     check_rules()
 
-# ================================================================
-# MAIN
-# ================================================================
 def main():
     global _client
-
-    log.info("=" * 50)
-    log.info("  BLUETTI AUTOMATION v1.0")
-    log.info(f"  Device : {DEVICE_NAME}")
-    log.info(f"  Broker : {MQTT_BROKER}:{MQTT_PORT}")
-    log.info(f"  Log    : {LOG_FILE}")
-    log.info("=" * 50)
-
-    if is_paused():
-        log.warning("PAUSED saat start (file flag ada). Resume via menu.py.")
-
+    log.info("BLUETTI AUTOMATION v3.1 (Stateless Guard)")
     _client = mqtt.Client()
-    _client.on_connect    = on_connect
-    _client.on_message    = on_message
-    _client.on_disconnect = on_disconnect
-
-    _client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
+    _client.on_connect, _client.on_message = on_connect, on_message
+    _client.connect(MQTT_BROKER, MQTT_PORT, 60)
     _client.loop_forever()
 
 if __name__ == "__main__":
