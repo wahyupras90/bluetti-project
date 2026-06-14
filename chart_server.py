@@ -475,6 +475,12 @@ body{background:#0f172a;color:#e2e8f0;font-family:'JetBrains Mono',monospace;min
 .btn-ac{width:100%;padding:14px;border-radius:8px;border:none;
   font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:bold;
   cursor:pointer;margin-bottom:8px;letter-spacing:1px;transition:all 0.15s}
+.btn-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;width:100%}
+.btn-grid-item{padding:13px 6px;border-radius:8px;border:none;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;cursor:pointer;transition:all 0.15s}
+.btn-ac-grid{background:#1a3a1a;color:#4ade80;border:1px solid #16a34a}
+.btn-auto-grid{background:#1e293b;color:#94a3b8;border:1px solid #334155}
+.btn-sys-grid{background:#1e3a5f;color:#e0f2fe;border:1px solid #0ea5e9}
+.btn-log-grid{background:#1e293b;color:#94a3b8;border:1px solid #334155}
 .btn-pause{width:100%;padding:11px;border-radius:8px;border:1px solid #334155;
   background:#1e293b;color:#94a3b8;font-family:'JetBrains Mono',monospace;
   font-size:14px;font-weight:700;cursor:pointer;margin-bottom:6px;transition:all 0.15s}
@@ -636,14 +642,13 @@ body{background:#0f172a;color:#e2e8f0;font-family:'JetBrains Mono',monospace;min
     </div>
   </div>
 
-  <!-- TOMBOL AC -->
-  <button class="btn-ac" id="btn-ac" onclick="const on=document.getElementById('s-ac').textContent==='ON';if(confirm(on?'Turn AC OFF?':'Turn AC ON?'))fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'ac',value:on?'OFF':'ON'})}).then(()=>setTimeout(fetchStatus,1000))">--</button>
-  <button class="btn-ac" onclick="showSystemPopup()" style="background:#1e3a5f;color:#e0f2fe;border:1px solid #0ea5e9;margin-bottom:8px">🖥️ System Status</button>
-
-  <!-- TOMBOL AUTOMATION -->
-  <button class="btn-pause" id="btn-auto" onclick="const p=document.getElementById('s-auto').textContent==='PAUSED';if(confirm(p?'Resume automation?':'Pause automation?'))fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:p?'resume':'pause'})}).then(()=>setTimeout(fetchStatus,1000))">⏸ Pause Automation</button>
-
-
+  <!-- 2x2 GRID TOMBOL -->
+  <div class="btn-grid">
+    <button class="btn-grid-item btn-ac-grid" id="btn-ac" onclick="const on=document.getElementById('s-ac').textContent==='ON';if(confirm(on?'Turn AC OFF?':'Turn AC ON?'))fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'ac',value:on?'OFF':'ON'})}).then(()=>setTimeout(fetchStatus,1000))">--</button>
+    <button class="btn-grid-item btn-auto-grid" id="btn-auto" onclick="const p=window._autoPaused;if(confirm(p?'Resume automation?':'Pause automation?'))fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:p?'resume':'pause'})}).then(()=>setTimeout(fetchStatus,1000))">⏸ Pause</button>
+    <button class="btn-grid-item btn-sys-grid" onclick="showSystemPopup()">🖥️ System</button>
+    <button class="btn-grid-item btn-log-grid" onclick="toggleLog()">📋 Log</button>
+  </div>
   <!-- LOG -->
   <div class="log-box" id="log-box">
     <span class="dim">Loading log...</span>
@@ -715,6 +720,17 @@ body{background:#0f172a;color:#e2e8f0;font-family:'JetBrains Mono',monospace;min
   </div>
 
 </div>
+</div>
+
+<!-- LOG MODAL -->
+<div class="modal-bg" id="log-modal">
+  <div class="modal" style="max-height:80vh;overflow-y:auto;width:92%">
+    <div class="modal-title">📋 LOG</div>
+    <div class="log-box" id="log-box" style="max-height:60vh;overflow-y:auto;margin:10px 0">
+      <span class="dim">Loading log...</span>
+    </div>
+    <button class="modal-cancel" style="width:100%;margin-top:8px" onclick="closeLogModal()">Close</button>
+  </div>
 </div>
 
 <!-- ══════════════ MODAL ══════════════ -->
