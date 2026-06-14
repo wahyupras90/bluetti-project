@@ -45,6 +45,7 @@ state = {
 
 _last_trigger = {f"A{i}": 0.0 for i in ["1", "1b", "2", "3", "4_pagi", "4_siang", "5", "6", "7"]}
 _timers = {"A2": None, "A4_siang": None, "A7": None}
+_a6_active = False
 
 def now_sec(): return time.time()
 def ac_is_on(): return state["ac_on"] == "ON"
@@ -119,16 +120,20 @@ def check_rules():
     # ────────────────────────────────────────────────────────────
     if grid is not None and grid < 200 and is_malam and soc >= 41:
         if ac_is_off() and debounce_ok("A6"):
+            global _a6_active
+            _a6_active = True
             trigger("A6", "PLN MATI MALAM", [f"GRID={grid:.0f}V", f"SOC={soc:.0f}%"], "AC ON", "ON")
         return
 
     if check_timer("A7", grid is not None and grid >= 215 and is_malam and ac_is_on(), 30):
         if debounce_ok("A7"):
+            global _a6_active
+            _a6_active = False
             trigger("A7", "PLN HIDUP KEMBALI", [f"GRID={grid:.0f}V stabil 30s"], "AC OFF", "OFF")
         return
 
     if is_malam and soc < 61:
-        if ac_is_on() and debounce_ok("A5"):
+        if ac_is_on() and debounce_ok("A5") and not _a6_active:
             trigger("A5", "STANDBY MALAM", [f"SOC={soc:.0f}% < 61%"], "AC OFF", "OFF")
         return
 
