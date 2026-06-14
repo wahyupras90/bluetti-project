@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import paho.mqtt.client as mqtt
 
-CSV_FILE      = os.path.expanduser("~/bluetti_history.csv")
+CSV_FILE      = "/tmp/bluetti_history.csv"
 LOG_FILE      = os.path.expanduser("~/bluetti_log.txt")
 LAST_RULE_FILE= os.path.expanduser("~/bluetti_last_rule.txt")
 PAUSE_FLAG    = "/tmp/automation_paused"
@@ -1186,7 +1186,7 @@ function buildChart(data) {
           }
         },
         zoom:{
-          pan:{enabled:false,mode:'x'},
+          pan:{enabled:true,mode:'x',threshold:15},
           zoom:{wheel:{enabled:true},pinch:{enabled:true},mode:'x'},
         },
       },
