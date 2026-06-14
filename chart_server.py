@@ -119,7 +119,9 @@ def on_connect(client, userdata, flags, rc):
     if rc == 0:
         client.subscribe([(t,0) for t in [
             TOPIC_SOC,TOPIC_PV,TOPIC_AC_OUT,TOPIC_GRID_V,
-            TOPIC_AC_ON,TOPIC_CHG,TOPIC_DCHG
+            TOPIC_AC_ON,TOPIC_CHG,TOPIC_DCHG,
+            f"bluetti/state/{DEVICE_NAME}/dc_output_on",
+            f"bluetti/state/{DEVICE_NAME}/dc_output_power"
         ]])
 
 def on_disconnect(client, userdata, rc):
@@ -137,6 +139,10 @@ def on_message(client, userdata, msg):
             elif t in (TOPIC_CHG,TOPIC_DCHG): state["chg_time"] = int(v)
         except ValueError:
             if t==TOPIC_AC_ON: state["ac_on"] = p.upper()
+            elif t.endswith("/dc_output_on"): state["dc_on"] = p.upper()
+            elif t.endswith("/dc_output_power"):
+                try: state["dc_out"] = float(p)
+                except: pass
         state["last_ts"] = __import__("time").time()
 
 def mqtt_thread():
@@ -223,7 +229,7 @@ def get_status():
     return {
         "time": now,
         "soc":  s["soc"], "pv": s["pv"], "ac_out": s["ac_out"],
-        "grid_v": s["grid_v"], "ac_on": s["ac_on"],
+        "grid_v": s["grid_v"], "ac_on": s["ac_on"], "dc_on": s.get("dc_on","OFF"), "dc_out": s.get("dc_out",0),
         "time_rem": time_rem, "time_rem_dir": time_rem_dir,
         "mqtt_ok": s["mqtt_ok"], "fresh": fresh, "last_upd": last_upd,
         "bt_active": bt_active, "bt_uptime": bt_uptime,
@@ -894,7 +900,7 @@ function _buildPts(){
   var pv=parseFloat(fd.pv)||0,ac=parseFloat(fd.ac_out)||0,dc=parseFloat(fd.dc_out)||0;
   if(pv>0)pts=pts.concat(_mk('pv_bat','#22c55e',pv));
   if(fd.ac_on==='ON')pts=pts.concat(_mk('bat_ac','#f97316',ac));
-  if(dc>0)pts=pts.concat(_mk('bat_dc','#f97316',dc));
+  if(fd.dc_on==='ON')pts=pts.concat(_mk('bat_dc','#f97316',dc>0?dc:5));
 }
 
 function _mk(key,col,w){
@@ -965,7 +971,7 @@ function _draw(){
   var nd=[
     {k:'pv', t:'pv',  v:pv+'W',  l:'PV',   c:pv>0?'#22c55e':'#475569',  a:pv>0},
     {k:'grid',t:'grid',v:gv+'V', l:'GRID', c:gv>50?'#0ea5e9':'#475569', a:gv>50},
-    {k:'dc', t:'dc',  v:dc+'W',  l:'DC',   c:dc>0?'#f97316':'#475569',  a:dc>0},
+    {k:'dc', t:'dc',  v:dc+'W',  l:'DC',   c:fd.dc_on==='ON'?'#f97316':'#475569',  a:fd.dc_on==='ON'},
     {k:'ac', t:'ac',  v:ac+'W',  l:'AC',   c:acOn?'#f97316':'#475569',  a:acOn}
   ];
   for(var ni=0;ni<nd.length;ni++){
