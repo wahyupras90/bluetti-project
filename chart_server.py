@@ -35,9 +35,74 @@ RULE_COLORS = {
     "A7": "rgba(107,114,128,0.18)",
 }
 RULE_LABELS = {
-    "A1":"A1 Pagi ON","A2":"A2 SOC Rendah","A3":"A3 Recovery",
-    "A4":"A4 Solar Lemah","A5":"A5 Standby","A6":"A6 PLN Mati","A7":"A7 PLN Hidup",
+    "A1":"A1 Morning ON","A2":"A2 Low SOC","A3":"A3 Recovery",
+    "A4":"A4 Weak Solar","A5":"A5 Standby Night","A6":"A6 Grid Down","A7":"A7 Grid Up",
 }
+
+
+def get_system_info():
+    """Baca CPU, suhu, RAM, disk, uptime dari sistem."""
+    info = {}
+    try:
+        # Suhu CPU
+        with open("/sys/class/thermal/thermal_zone0/temp") as f:
+            info["temp"] = round(int(f.read().strip()) / 1000, 1)
+    except: info["temp"] = None
+
+    try:
+        # CPU usage (baca dua kali selisih 0.5 detik)
+        import time
+        def read_cpu():
+            with open("/proc/stat") as f:
+                line = f.readline()
+            vals = list(map(int, line.split()[1:]))
+            idle = vals[3]
+            total = sum(vals)
+            return idle, total
+        i1, t1 = read_cpu()
+        time.sleep(0.5)
+        i2, t2 = read_cpu()
+        info["cpu"] = round((1 - (i2-i1)/(t2-t1)) * 100, 1)
+    except: info["cpu"] = None
+
+    try:
+        # RAM
+        mem = {}
+        with open("/proc/meminfo") as f:
+            for line in f:
+                k, v = line.split(":")
+                mem[k.strip()] = int(v.strip().split()[0])
+        total_mb = mem["MemTotal"] // 1024
+        avail_mb = mem["MemAvailable"] // 1024
+        used_mb  = total_mb - avail_mb
+        info["ram_used"] = used_mb
+        info["ram_total"] = total_mb
+        info["ram_pct"]  = round(used_mb / total_mb * 100)
+    except: info["ram_used"] = info["ram_total"] = info["ram_pct"] = None
+
+    try:
+        # Disk
+        import os
+        st = os.statvfs(os.path.expanduser("~"))
+        total_gb = round(st.f_blocks * st.f_frsize / 1e9, 1)
+        free_gb  = round(st.f_bavail * st.f_frsize / 1e9, 1)
+        used_gb  = round(total_gb - free_gb, 1)
+        info["disk_used"]  = used_gb
+        info["disk_total"] = total_gb
+        info["disk_pct"]   = round(used_gb / total_gb * 100)
+    except: info["disk_used"] = info["disk_total"] = info["disk_pct"] = None
+
+    try:
+        # Uptime
+        with open("/proc/uptime") as f:
+            secs = float(f.read().split()[0])
+        d = int(secs // 86400)
+        h = int((secs % 86400) // 3600)
+        m = int((secs % 3600) // 60)
+        info["uptime"] = f"{d}d {h}h {m}m" if d > 0 else f"{h}h {m}m"
+    except: info["uptime"] = None
+
+    return info
 
 # ================================================================
 # MQTT STATE
@@ -285,6 +350,38 @@ def calc_summary(rows):
     load = sum(r["ac_out"] for r in rows if r["ac_out"] is not None)/60/1000
     return {"pv":round(pv,3),"load":round(load,3),"diff":round(pv-load,3)}
 
+
+def load_degradation():
+    """Baca bluetti_degradation.csv dan hitung ringkasan."""
+    deg_file = os.path.expanduser("~/bluetti_degradation.csv")
+    if not os.path.exists(deg_file):
+        return None
+    try:
+        rows = []
+        with open(deg_file) as f:
+            for row in csv.DictReader(f):
+                try:
+                    rows.append({
+                        "date": row["date"],
+                        "time": row["time"],
+                        "eff_wh": float(row["eff_capacity_wh"]),
+                    })
+                except: continue
+        if not rows:
+            return None
+        baseline  = rows[0]["eff_wh"]
+        last      = rows[-1]
+        deg_pct   = (1 - last["eff_wh"] / baseline) * 100 if baseline else 0
+        return {
+            "last_wh":   round(last["eff_wh"]),
+            "last_date": f"{last['date']} {last['time']}",
+            "baseline":  round(baseline),
+            "deg_pct":   round(deg_pct, 1),
+            "count":     len(rows),
+        }
+    except:
+        return None
+
 def get_chart(hours, label):
     rows  = load_csv(hours)
     rules = load_rules(hours)
@@ -296,6 +393,7 @@ def get_chart(hours, label):
         "ac_out": [r["ac_out"] for r in rows],
         "rules":  rules, "summary": s,
         "period": label, "count": len(rows),
+        "degradation": load_degradation(),
     }
 
 # ================================================================
@@ -350,6 +448,20 @@ body{background:#0f172a;color:#e2e8f0;font-family:'Courier New',monospace;min-he
 .log-action{color:#22c55e}
 .log-detail{color:#64748b}
 
+/* SYSTEM POPUP */
+.sys-btn{width:100%;padding:11px;border-radius:8px;border:1px solid #334155;
+  background:#1e293b;color:#94a3b8;font-family:'Courier New',monospace;
+  font-size:12px;cursor:pointer;margin-bottom:6px;letter-spacing:1px}
+.sys-btn:hover{border-color:#0ea5e9;color:#e0f2fe}
+.sys-row{display:flex;justify-content:space-between;padding:6px 0;
+  border-bottom:1px solid #0f172a;font-size:13px}
+.sys-row:last-child{border-bottom:none}
+.sys-label{color:#94a3b8}
+.reboot-btn{width:100%;padding:11px;border-radius:8px;border:none;
+  background:#7f1d1d;color:#fca5a5;font-family:'Courier New',monospace;
+  font-size:13px;font-weight:bold;cursor:pointer;margin-top:12px}
+.reboot-btn:hover{background:#991b1b}
+
 /* MODAL */
 .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);
   z-index:100;align-items:center;justify-content:center}
@@ -385,6 +497,13 @@ body{background:#0f172a;color:#e2e8f0;font-family:'Courier New',monospace;min-he
 .summary-value{font-weight:bold}
 .surplus{color:#22c55e}.deficit{color:#ef4444}
 .divider{border:none;border-top:1px solid #0f172a;margin:10px 0}
+.health-card{background:#1e293b;border-radius:8px;padding:14px 16px;margin-top:10px}
+.health-title{font-size:11px;color:#94a3b8;letter-spacing:2px;margin-bottom:12px}
+.health-row{display:flex;justify-content:space-between;align-items:center;
+  padding:7px 0;border-bottom:1px solid #0f172a;font-size:13px}
+.health-row:last-child{border-bottom:none}
+.health-label{color:#ffffff}
+.health-note{font-size:10px;color:#94a3b8;margin-top:8px;line-height:1.5}
 .reset-btn{display:block;width:100%;margin-top:10px;padding:8px;
   background:#1e293b;border:1px solid #334155;color:#94a3b8;
   border-radius:6px;font-family:'Courier New',monospace;font-size:12px;cursor:pointer}
@@ -406,6 +525,18 @@ body{background:#0f172a;color:#e2e8f0;font-family:'Courier New',monospace;min-he
 <div id="tab-control" class="tab-content active">
 
   <!-- STATUS -->
+  <!-- WEATHER -->
+  <div class="status-card" id="weather-card" style="display:none">
+    <div class="status-row">
+      <span class="status-label">TODAY</span>
+      <span class="status-value" id="w-today">--</span>
+    </div>
+    <div class="status-row">
+      <span class="status-label">TOMORROW</span>
+      <span class="status-value" id="w-tomorrow">--</span>
+    </div>
+  </div>
+
   <div class="status-card" id="status-card">
     <div class="status-row">
       <span class="status-label">TIME</span>
@@ -468,18 +599,6 @@ body{background:#0f172a;color:#e2e8f0;font-family:'Courier New',monospace;min-he
     </div>
   </div>
 
-  <!-- WEATHER -->
-  <div class="status-card" id="weather-card" style="display:none">
-    <div class="status-row">
-      <span class="status-label">TODAY</span>
-      <span class="status-value" id="w-today">--</span>
-    </div>
-    <div class="status-row">
-      <span class="status-label">TOMORROW</span>
-      <span class="status-value" id="w-tomorrow">--</span>
-    </div>
-  </div>
-
   <!-- TOMBOL AC -->
   <button class="btn-ac" id="btn-ac" onclick="showAcModal()">--</button>
 
@@ -487,9 +606,12 @@ body{background:#0f172a;color:#e2e8f0;font-family:'Courier New',monospace;min-he
   <button class="btn-pause" onclick="showModal('pause')">⏸ Pause automation</button>
   <button class="btn-pause" onclick="showModal('resume')">▶ Resume automation</button>
 
+  <!-- SYSTEM STATUS BUTTON -->
+  <button class="sys-btn" onclick="showSystemPopup()">🖥️ System Status</button>
+
   <!-- LOG -->
   <div class="log-box" id="log-box">
-    <span class="dim">Memuat log...</span>
+    <span class="dim">Loading log...</span>
   </div>
 
 </div>
@@ -497,6 +619,13 @@ body{background:#0f172a;color:#e2e8f0;font-family:'Courier New',monospace;min-he
 <!-- ══════════════ TAB CHART ══════════════ -->
 <div id="tab-chart" class="tab-content">
 
+  <div id="flow-view">
+    <canvas id="flowCv" style="display:block;width:100%;background:#0f172a;border-radius:12px"></canvas>
+    <button onclick="window.showGraphView()" style="display:block;width:100%;padding:12px;margin-top:10px;border-radius:8px;border:1px solid #0ea5e9;background:#0f4c75;color:#e0f2fe;font-family:Courier New,monospace;font-size:13px;font-weight:bold;cursor:pointer">📊 Graph &amp; History</button>
+  </div>
+
+  <div id="graph-view" style="display:none">
+    <button onclick="window.showFlowView()" style="display:block;width:100%;padding:11px;margin-bottom:12px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#94a3b8;font-family:Courier New,monospace;font-size:13px;cursor:pointer">← Back to Energy Flow</button>
   <div class="period-row">
     <button class="btn-period" onclick="loadChart(1,'1H',this)">1H</button>
     <button class="btn-period active" onclick="loadChart(24,'1D',this)">1D</button>
@@ -525,24 +654,32 @@ body{background:#0f172a;color:#e2e8f0;font-family:'Courier New',monospace;min-he
   </div>
 
   <div class="summary">
-    <div class="summary-title" id="sum-title">SUMMARY ENERGI — 1D</div>
+    <div class="summary-title" id="sum-title">ENERGY SUMMARY — 1D</div>
     <div class="summary-row">
-      <span class="summary-label">☀️  PV dihasilkan</span>
+      <span class="summary-label">☀️  PV generated</span>
       <span class="summary-value" id="sum-pv">—</span>
     </div>
     <div class="summary-row">
-      <span class="summary-label">⚡  AC konsumsi</span>
+      <span class="summary-label">⚡  AC consumption</span>
       <span class="summary-value" id="sum-load">—</span>
     </div>
     <hr class="divider">
     <div class="summary-row">
-      <span class="summary-label">📊  Selisih</span>
+      <span class="summary-label">📊  Difference</span>
       <span class="summary-value" id="sum-diff">—</span>
     </div>
   </div>
 
   <button class="reset-btn" onclick="resetZoom()">↺ Reset zoom</button>
 
+  <div class="health-card">
+    <div class="health-title">🔋 BATTERY HEALTH</div>
+    <div id="health-content">
+      <div class="health-note">Loading data...</div>
+    </div>
+  </div>
+
+</div>
 </div>
 
 <!-- ══════════════ MODAL ══════════════ -->
@@ -557,6 +694,24 @@ body{background:#0f172a;color:#e2e8f0;font-family:'Courier New',monospace;min-he
   </div>
 </div>
 
+<!-- SYSTEM POPUP -->
+<div class="modal-bg" id="sys-modal">
+  <div class="modal">
+    <div class="modal-title">🖥️ SYSTEM STATUS</div>
+    <div id="sys-content">
+      <div class="sys-row"><span class="sys-label">CPU</span><span id="sys-cpu">--</span></div>
+      <div class="sys-row"><span class="sys-label">TEMP</span><span id="sys-temp">--</span></div>
+      <div class="sys-row"><span class="sys-label">RAM</span><span id="sys-ram">--</span></div>
+      <div class="sys-row"><span class="sys-label">DISK</span><span id="sys-disk">--</span></div>
+      <div class="sys-row"><span class="sys-label">UPTIME</span><span id="sys-uptime">--</span></div>
+    </div>
+    <button class="reboot-btn" onclick="confirmReboot()">⟳ Reboot Pi</button>
+    <div class="modal-btns" style="margin-top:8px">
+      <button class="modal-cancel" style="flex:unset;width:100%" onclick="closeSysModal()">Close</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ── TAB ──────────────────────────────────────────────────────────
 function switchTab(name, btn) {
@@ -564,7 +719,7 @@ function switchTab(name, btn) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('tab-'+name).classList.add('active');
-  if (name === 'chart' && !chart) loadChart(24,'1D',document.querySelector('.btn-period.active'));
+  if (name === 'chart') { if(!window._fOK){window.initFlow();window._fOK=true;} }
 }
 
 // ── STATUS FETCH ─────────────────────────────────────────────────
@@ -696,6 +851,154 @@ function applyStatus(d) {
 }
 
 // Auto-refresh 10 detik
+
+(function(){
+var cv,ctx,fd={},raf=null,pts=[],W=0,H=0;
+
+window.showFlowView=function(){
+  document.getElementById('flow-view').style.display='block';
+  document.getElementById('graph-view').style.display='none';
+  if(window.chart){try{window.chart.options.plugins.zoom.pan.enabled=false;window.chart.update('none');}catch(e){}}
+  _start();
+};
+window.showGraphView=function(){
+  document.getElementById('flow-view').style.display='none';
+  document.getElementById('graph-view').style.display='block';
+  _stop();
+  if(window.chart){try{window.chart.options.plugins.zoom.pan.enabled=true;window.chart.update('none');}catch(e){}}
+  if(!window.chart)loadChart(24,'1D',document.querySelector('.btn-period.active'));
+};
+window.initFlow=function(){
+  cv=document.getElementById('flowCv');
+  ctx=cv.getContext('2d');
+  _fetch();setInterval(_fetch,5000);
+  setTimeout(_start,300);
+  window.addEventListener('resize',function(){_stop();setTimeout(_start,200);});
+};
+
+function _stop(){if(raf){cancelAnimationFrame(raf);raf=null;}}
+
+function _start(){
+  if(!cv)return;
+  var dpr=window.devicePixelRatio||1;
+  W=Math.min(480,window.innerWidth-28);
+  H=W*1.12;
+  cv.width=W*dpr;cv.height=H*dpr;
+  cv.style.width=W+'px';cv.style.height=H+'px';
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.scale(dpr,dpr);
+  _buildPts();_stop();_draw();
+}
+
+function _buildPts(){
+  pts=[];
+  var pv=parseFloat(fd.pv)||0,ac=parseFloat(fd.ac_out)||0,dc=parseFloat(fd.dc_out)||0;
+  if(pv>0)pts=pts.concat(_mk('pv_bat','#22c55e',pv));
+  if(fd.ac_on==='ON')pts=pts.concat(_mk('bat_ac','#f97316',ac));
+  if(dc>0)pts=pts.concat(_mk('bat_dc','#f97316',dc));
+}
+
+function _mk(key,col,w){
+  var n=Math.min(5,Math.max(1,Math.floor(w/100)));
+  var sp=w>300?0.010:w>100?0.006:0.003;
+  var ln=Math.min(0.15,Math.max(0.05,w/2500));
+  var a=[];for(var k=0;k<n;k++)a.push({key:key,col:col,t:(k/n+k*0.06)%1,sp:sp,ln:ln});
+  return a;
+}
+
+function _pt(path,t){
+  var L=[];
+  for(var k=0;k<path.length-1;k++){var dx=path[k+1].x-path[k].x,dy=path[k+1].y-path[k].y;L.push(Math.sqrt(dx*dx+dy*dy));}
+  var tot=0;for(var k=0;k<L.length;k++)tot+=L[k];
+  var d=t*tot;
+  for(var k=0;k<L.length;k++){if(d<=L[k]){var r=d/L[k];return{x:path[k].x+(path[k+1].x-path[k].x)*r,y:path[k].y+(path[k+1].y-path[k].y)*r};}d-=L[k];}
+  return path[path.length-1];
+}
+
+function _ico(type,cx,cy,r,col){
+  ctx.save();ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=Math.max(1,r*0.12);
+  var s=r*0.48;
+  if(type==='pv'){for(var a=-1;a<=1;a++)for(var b=-1;b<=1;b++)ctx.strokeRect(cx+a*s*0.66-s*0.28,cy+b*s*0.66-s*0.28,s*0.56,s*0.56);}
+  else if(type==='grid'){ctx.beginPath();ctx.moveTo(cx+s*0.2,cy-s);ctx.lineTo(cx-s*0.3,cy+s*0.1);ctx.lineTo(cx+s*0.05,cy+s*0.1);ctx.lineTo(cx-s*0.2,cy+s);ctx.lineTo(cx+s*0.3,cy-s*0.1);ctx.lineTo(cx-s*0.05,cy-s*0.1);ctx.closePath();ctx.fill();}
+  else if(type==='bat'){var w=r,h=r*0.55;ctx.strokeRect(cx-w/2,cy-h/2,w,h);ctx.fillRect(cx+w/2,cy-h*0.22,r*0.1,h*0.44);ctx.fillRect(cx-w*0.25,cy-h*0.22,w*0.5,h*0.44);}
+  else if(type==='dc'){ctx.lineWidth=Math.max(2,r*0.15);ctx.beginPath();ctx.moveTo(cx-s*0.6,cy-s*0.2);ctx.lineTo(cx+s*0.6,cy-s*0.2);ctx.stroke();ctx.setLineDash([r*0.12,r*0.1]);ctx.lineWidth=Math.max(1,r*0.08);ctx.beginPath();ctx.moveTo(cx-s*0.6,cy+s*0.2);ctx.lineTo(cx+s*0.6,cy+s*0.2);ctx.stroke();ctx.setLineDash([]);}
+  else if(type==='ac'){ctx.beginPath();ctx.arc(cx,cy,s,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.moveTo(cx-s*0.45,cy);ctx.bezierCurveTo(cx-s*0.15,cy-s*0.38,cx+s*0.15,cy+s*0.38,cx+s*0.45,cy);ctx.stroke();}
+  ctx.restore();
+}
+
+function _draw(){
+  if(!W||W<10){raf=requestAnimationFrame(_draw);return;}
+  ctx.clearRect(0,0,W,H);
+  var pv=parseFloat(fd.pv)||0,ac=parseFloat(fd.ac_out)||0;
+  var dc=parseFloat(fd.dc_out)||0,gv=parseFloat(fd.grid_v)||0;
+  var soc=parseFloat(fd.soc)||0,acOn=fd.ac_on==='ON';
+  var tr=fd.time_rem||'--',td=fd.time_rem_dir||0;
+  var pad=W*0.06,nR=W*0.09,bR=W*0.17,mx=W/2,my=H*0.48;
+  var N={pv:{x:pad+nR,y:H*0.15},grid:{x:W-pad-nR,y:H*0.15},dc:{x:pad+nR,y:H*0.82},ac:{x:W-pad-nR,y:H*0.82}};
+  var jT=my-bR*0.35,jB=my+bR*0.35;
+  var PA={
+    pv_bat:[{x:N.pv.x,y:N.pv.y+nR},{x:N.pv.x,y:jT},{x:mx-bR*0.93,y:jT}],
+    grid_bat:[{x:N.grid.x,y:N.grid.y+nR},{x:N.grid.x,y:jT},{x:mx+bR*0.93,y:jT}],
+    bat_dc:[{x:mx-bR*0.93,y:jB},{x:N.dc.x,y:jB},{x:N.dc.x,y:N.dc.y-nR}],
+    bat_ac:[{x:mx+bR*0.93,y:jB},{x:N.ac.x,y:jB},{x:N.ac.x,y:N.ac.y-nR}]
+  };
+  var act={pv_bat:pv>0,bat_ac:acOn,bat_dc:dc>0,grid_bat:false};
+  var acl={pv_bat:'#22c55e',bat_ac:'#f97316',bat_dc:'#f97316',grid_bat:'#0ea5e9'};
+  ctx.lineCap='round';ctx.lineJoin='round';
+  var ks=Object.keys(PA);
+  for(var ki=0;ki<ks.length;ki++){
+    var k=ks[ki],p=PA[k];
+    ctx.strokeStyle=act[k]?acl[k]+'44':'#1e293b';ctx.lineWidth=3;
+    ctx.beginPath();ctx.moveTo(p[0].x,p[0].y);
+    for(var pi=1;pi<p.length-1;pi++)ctx.arcTo(p[pi].x,p[pi].y,p[pi+1].x,p[pi+1].y,16);
+    ctx.lineTo(p[p.length-1].x,p[p.length-1].y);ctx.stroke();
+  }
+  var jd=[[mx-bR*0.93,jT],[mx+bR*0.93,jT],[mx-bR*0.93,jB],[mx+bR*0.93,jB]];
+  for(var ji=0;ji<jd.length;ji++){ctx.beginPath();ctx.arc(jd[ji][0],jd[ji][1],3.5,0,Math.PI*2);ctx.fillStyle='#475569';ctx.fill();}
+  for(var pi=0;pi<pts.length;pi++){
+    var p=pts[pi],path=PA[p.key];if(!path)continue;
+    p.t=(p.t+p.sp)%1;
+    var h=_pt(path,p.t),tl=_pt(path,Math.max(0,p.t-p.ln));
+    var g=ctx.createLinearGradient(tl.x,tl.y,h.x,h.y);
+    g.addColorStop(0,p.col+'00');g.addColorStop(1,p.col);
+    ctx.strokeStyle=g;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(tl.x,tl.y);ctx.lineTo(h.x,h.y);ctx.stroke();
+  }
+  var nd=[
+    {k:'pv', t:'pv',  v:pv+'W',  l:'PV',   c:pv>0?'#22c55e':'#475569',  a:pv>0},
+    {k:'grid',t:'grid',v:gv+'V', l:'GRID', c:gv>50?'#0ea5e9':'#475569', a:gv>50},
+    {k:'dc', t:'dc',  v:dc+'W',  l:'DC',   c:dc>0?'#f97316':'#475569',  a:dc>0},
+    {k:'ac', t:'ac',  v:ac+'W',  l:'AC',   c:acOn?'#f97316':'#475569',  a:acOn}
+  ];
+  for(var ni=0;ni<nd.length;ni++){
+    var n=nd[ni],np=N[n.k];
+    ctx.beginPath();ctx.arc(np.x,np.y,nR,0,Math.PI*2);
+    ctx.fillStyle=n.a?n.c+'33':'#1e293b';ctx.fill();
+    ctx.strokeStyle=n.c;ctx.lineWidth=2;ctx.stroke();
+    _ico(n.t,np.x,np.y-nR*0.25,nR*0.38,n.c);
+    ctx.textAlign='center';
+    ctx.fillStyle='#e2e8f0';ctx.font='bold '+Math.round(W*0.030)+'px Courier New';
+    ctx.fillText(n.v,np.x,np.y+nR*0.15);
+    ctx.fillStyle=n.c;ctx.font=Math.round(W*0.024)+'px Courier New';
+    ctx.fillText(n.l,np.x,np.y+nR*0.48);
+  }
+  var sc=soc>50?'#22c55e':soc>=30?'#f97316':'#ef4444';
+  var sA=Math.PI*0.65,eA=Math.PI*2.35;
+  ctx.beginPath();ctx.arc(mx,my,bR,sA,eA);ctx.strokeStyle='#1e293b';ctx.lineWidth=8;ctx.lineCap='round';ctx.stroke();
+  ctx.beginPath();ctx.arc(mx,my,bR,sA,sA+(eA-sA)*(soc/100));ctx.strokeStyle=sc;ctx.lineWidth=8;ctx.stroke();
+  _ico('bat',mx,my-bR*0.42,bR*0.25,sc);
+  ctx.fillStyle=sc;ctx.font='bold '+Math.round(W*0.075)+'px Courier New';ctx.textAlign='center';
+  ctx.fillText(soc+'%',mx,my+bR*0.1);
+  ctx.font=Math.round(W*0.032)+'px Courier New';
+  ctx.fillStyle=td>0?'#22c55e':td<0?'#ef4444':'#475569';
+  ctx.fillText(tr,mx,my+bR*0.4);
+  raf=requestAnimationFrame(_draw);
+}
+
+async function _fetch(){
+  try{var r=await fetch('/api/status');fd=await r.json();_buildPts();}catch(e){}
+}
+})();
+
 fetchStatus();
 setInterval(fetchStatus, 10000);
 
@@ -743,6 +1046,43 @@ async function doConfirm() {
       body: JSON.stringify(pendingAction)
     });
     setTimeout(fetchStatus, 1000);
+  } catch(e) {}
+}
+
+// ── SYSTEM STATUS ───────────────────────────────────────────────
+async function showSystemPopup() {
+  document.getElementById('sys-modal').classList.add('show');
+  try {
+    const r = await fetch('/api/system');
+    const d = await r.json();
+    const cpuCls = d.cpu > 80 ? 'red' : d.cpu > 50 ? 'yellow' : 'green';
+    const tmpCls = d.temp > 70 ? 'red' : d.temp > 55 ? 'yellow' : 'green';
+    const ramCls = d.ram_pct > 80 ? 'red' : d.ram_pct > 60 ? 'yellow' : 'green';
+    document.getElementById('sys-cpu').innerHTML =
+      `<span class="${cpuCls}">${d.cpu}%</span>`;
+    document.getElementById('sys-temp').innerHTML =
+      `<span class="${tmpCls}">${d.temp}°C</span>`;
+    document.getElementById('sys-ram').innerHTML =
+      `<span class="${ramCls}">${d.ram_used}MB / ${d.ram_total}MB (${d.ram_pct}%)</span>`;
+    document.getElementById('sys-disk').textContent =
+      `${d.disk_used}GB / ${d.disk_total}GB (${d.disk_pct}%)`;
+    document.getElementById('sys-uptime').textContent = d.uptime;
+  } catch(e) {
+    document.getElementById('sys-content').innerHTML =
+      '<div style="color:#ef4444">Gagal memuat data sistem</div>';
+  }
+}
+
+function closeSysModal() {
+  document.getElementById('sys-modal').classList.remove('show');
+}
+
+async function confirmReboot() {
+  if (!confirm('Yakin mau reboot Pi?\nSemua service akan restart ~1 menit.')) return;
+  try {
+    await fetch('/api/reboot', {method:'POST'});
+    closeSysModal();
+    alert('Pi is rebooting... wait ~1 minute then refresh.');
   } catch(e) {}
 }
 
@@ -891,13 +1231,49 @@ async function loadChart(hours, label, btn) {
     const d = await r.json();
     currentRules = d.rules;
     buildChart(d);
-    document.getElementById('sum-title').textContent  = `SUMMARY ENERGI — ${label}`;
+    renderHealth(d.degradation);
+    document.getElementById('sum-title').textContent  = `ENERGY SUMMARY — ${label}`;
     document.getElementById('sum-pv').textContent     = `${d.summary.pv} kWh`;
     document.getElementById('sum-load').textContent   = `${d.summary.load} kWh`;
     const diff=d.summary.diff, el=document.getElementById('sum-diff');
     if(diff>=0){el.textContent=`+${diff.toFixed(3)} kWh ↑`;el.className='summary-value surplus';}
     else{el.textContent=`${diff.toFixed(3)} kWh ↓`;el.className='summary-value deficit';}
   } catch(e) {}
+}
+
+function renderHealth(deg) {
+  const el = document.getElementById('health-content');
+  if (!deg) {
+    el.innerHTML = '<div class="health-note">No data yet — first measurement will appear after a valid discharge window is detected (AC ON + PV=0 + stable load at night).</div>';
+    return;
+  }
+  const pct  = deg.deg_pct;
+  const cls  = pct < 5 ? 'green' : pct < 15 ? 'yellow' : 'red';
+  const note = deg.count < 10
+    ? `<div class="health-note">⚠ Accuracy still low (${deg.count} measurements). Improves after 30+ measurements.</div>`
+    : `<div class="health-note">✓ ${deg.count} measurements collected.</div>`;
+  el.innerHTML = `
+    <div class="health-row">
+      <span class="health-label">Last</span>
+      <span class="summary-value">${deg.last_wh.toLocaleString()} Wh</span>
+    </div>
+    <div class="health-row">
+      <span class="health-label">Waktu ukur</span>
+      <span class="summary-value dim">${deg.last_date}</span>
+    </div>
+    <div class="health-row">
+      <span class="health-label">Baseline</span>
+      <span class="summary-value">${deg.baseline.toLocaleString()} Wh</span>
+    </div>
+    <div class="health-row">
+      <span class="health-label">Degradation</span>
+      <span class="summary-value ${cls}">${pct >= 0 ? '+' : ''}${pct}% ↓</span>
+    </div>
+    <div class="health-row">
+      <span class="health-label">Data points</span>
+      <span class="summary-value">${deg.count} measurements</span>
+    </div>
+    ${note}`;
 }
 
 function toggleFilter(key) {
@@ -950,6 +1326,13 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length",str(len(b)))
             self.end_headers(); self.wfile.write(b)
 
+        elif self.path == "/api/system":
+            b = json.dumps(get_system_info()).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type","application/json")
+            self.send_header("Content-Length",str(len(b)))
+            self.end_headers(); self.wfile.write(b)
+
         elif self.path.startswith("/api/chart"):
             from urllib.parse import urlparse,parse_qs
             qs    = parse_qs(urlparse(self.path).query)
@@ -965,6 +1348,15 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(404); self.end_headers()
 
     def do_POST(self):
+        if self.path == "/api/reboot":
+            import subprocess
+            subprocess.Popen(["sudo","reboot"])
+            self.send_response(200)
+            self.send_header("Content-Type","application/json")
+            self.end_headers()
+            self.wfile.write(b'{"ok":true}')
+            return
+
         if self.path == "/api/action":
             length = int(self.headers.get("Content-Length",0))
             body   = self.rfile.read(length)
