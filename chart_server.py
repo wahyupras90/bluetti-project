@@ -973,12 +973,14 @@ function _draw(){
     ctx.beginPath();ctx.arc(np.x,np.y,nR,0,Math.PI*2);
     ctx.fillStyle=n.a?n.c+'33':'#1e293b';ctx.fill();
     ctx.strokeStyle=n.c;ctx.lineWidth=2;ctx.stroke();
-    _ico(n.t,np.x,np.y-nR*0.25,nR*0.38,n.c);
+    _ico(n.t,np.x,np.y-nR*0.32,nR*0.35,n.c);
     ctx.textAlign='center';
-    ctx.fillStyle='#e2e8f0';ctx.font='bold '+Math.round(W*0.030)+'px Courier New';
-    ctx.fillText(n.v,np.x,np.y+nR*0.15);
+    ctx.fillStyle=n.c;ctx.font='bold '+Math.round(W*0.030)+'px Courier New';
+    ctx.fillText(n.v,np.x,np.y+nR*0.22);
+    ctx.globalAlpha=0.65;
     ctx.fillStyle=n.c;ctx.font=Math.round(W*0.024)+'px Courier New';
-    ctx.fillText(n.l,np.x,np.y+nR*0.48);
+    ctx.fillText(n.l,np.x,np.y+nR*0.55);
+    ctx.globalAlpha=1.0;
   }
   var sc=soc>50?'#22c55e':soc>=30?'#f97316':'#ef4444';
   var sA=Math.PI*0.65,eA=Math.PI*2.35;
