@@ -999,7 +999,7 @@ async function _fetch(){
 })();
 
 fetchStatus();
-setInterval(fetchStatus, 10000);
+setInterval(fetchStatus, 5000);
 
 // ── MODAL ────────────────────────────────────────────────────────
 function showAcModal() {
@@ -1049,8 +1049,13 @@ async function doConfirm() {
 }
 
 // ── SYSTEM STATUS ───────────────────────────────────────────────
+let _sysTimer = null;
 async function showSystemPopup() {
   document.getElementById('sys-modal').classList.add('show');
+  await _fetchSys();
+  _sysTimer = setInterval(_fetchSys, 3000);
+}
+async function _fetchSys() {
   try {
     const r = await fetch('/api/system');
     const d = await r.json();
@@ -1074,6 +1079,7 @@ async function showSystemPopup() {
 
 function closeSysModal() {
   document.getElementById('sys-modal').classList.remove('show');
+  if(_sysTimer){clearInterval(_sysTimer);_sysTimer=null;}
 }
 
 async function confirmReboot() {
