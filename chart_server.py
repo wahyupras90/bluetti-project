@@ -257,7 +257,7 @@ def get_weather():
         url = (f"https://api.open-meteo.com/v1/forecast"
                f"?latitude={LAT}&longitude={LON}"
                f"&daily=weathercode,shortwave_radiation_sum"
-               f"&hourly=shortwave_radiation"
+               f"&hourly=shortwave_radiation,weathercode"
                f"&timezone=Asia%2FJakarta&forecast_days=2")
         with urllib.request.urlopen(url, timeout=5) as r:
             d = json.loads(r.read())
@@ -279,6 +279,7 @@ def get_weather():
         # Ambil irr jam sekarang dan +1 jam
         hourly_times = d.get("hourly", {}).get("time", [])
         hourly_irr   = d.get("hourly", {}).get("shortwave_radiation", [])
+        hourly_wcode = d.get("hourly", {}).get("weathercode", [])
         from datetime import datetime as _dt
         now_str  = _dt.now().strftime("%Y-%m-%dT%H:00")
         nxt_str  = _dt.now().replace(minute=0,second=0,microsecond=0)
@@ -286,10 +287,33 @@ def get_weather():
         nxt_str  = (_dt.now().replace(minute=0,second=0,microsecond=0) + _td(hours=1)).strftime("%Y-%m-%dT%H:00")
         irr_now  = hourly_irr[hourly_times.index(now_str)]  if now_str in hourly_times else None
         irr_next = hourly_irr[hourly_times.index(nxt_str)]  if nxt_str in hourly_times else None
+
+        # Bangun irr_today dan irr_tomorrow per jam
+        from datetime import datetime as _dt2
+        today_str = _dt2.now().strftime("%Y-%m-%d")
+        tomorrow_str = (_dt2.now() + __import__("datetime").timedelta(days=1)).strftime("%Y-%m-%d")
+
+        def wcode_for_hour(t_str):
+            # Ambil weathercode harian sebagai icon per jam (simplifikasi)
+            return wcode_to_icon(codes[0] if codes else None)
+
+        irr_today = []
+        irr_tomorrow = []
+        for idx2, t in enumerate(hourly_times):
+            if idx2 >= len(hourly_irr): break
+            irr_val = round(hourly_irr[idx2], 1)
+            h = int(t[11:13])
+            h_icon = wcode_to_icon(hourly_wcode[idx2] if idx2 < len(hourly_wcode) else None)
+            if t.startswith(today_str):
+                irr_today.append({"h": h, "irr": irr_val, "icon": h_icon})
+            elif t.startswith(tomorrow_str):
+                irr_tomorrow.append({"h": h, "irr": irr_val, "icon": h_icon})
+
         result = {
             "today":    {"icon": wcode_to_icon(codes[0] if codes else None),    "pv_est": rad_to_kwh(rad[0] if rad else None)},
             "tomorrow": {"icon": wcode_to_icon(codes[1] if len(codes)>1 else None), "pv_est": rad_to_kwh(rad[1] if len(rad)>1 else None)},
             "irr_now": irr_now, "irr_next": irr_next,
+            "irr_today": irr_today, "irr_tomorrow": irr_tomorrow,
         }
         _weather_cache["data"] = result
         _weather_cache["ts"]   = now
@@ -734,6 +758,15 @@ body{background:#0f172a;color:#e2e8f0;font-family:'JetBrains Mono',monospace;min
   </div>
 </div>
 
+<!-- FORECAST MODAL -->
+<div class="modal-bg" id="fc-modal">
+  <div class="modal" style="border-radius:16px 16px 0 0;max-height:70vh;overflow-y:auto;padding:16px">
+    <div class="modal-title" id="fc-title" style="text-align:center;margin-bottom:12px">FORECAST</div>
+    <div id="fc-content"></div>
+    <button class="modal-cancel" style="width:100%;margin-top:10px" onclick="document.getElementById('fc-modal').classList.remove('show')">Close</button>
+  </div>
+</div>
+
 <!-- ══════════════ MODAL ══════════════ -->
 <div class="modal-bg" id="modal">
   <div class="modal">
@@ -1078,6 +1111,38 @@ function toggleLog(){
 }
 function closeLogModal(){
   document.getElementById('log-modal').classList.remove('show');
+}
+function showForecast(day) {
+  const w = window._weatherData;
+  if (!w) return;
+  const isToday = day === 'today';
+  document.getElementById('fc-title').textContent = isToday ? 'TODAY FORECAST' : 'TOMORROW FORECAST';
+  const hourly = isToday ? w.irr_today : w.irr_tomorrow;
+  if (!hourly || !hourly.length) {
+    document.getElementById('fc-content').innerHTML = '<div style="color:#475569;text-align:center;padding:20px">No hourly data</div>';
+    document.getElementById('fc-modal').classList.add('show');
+    return;
+  }
+  const nowH = new Date().getHours();
+  const startH = isToday ? Math.max(nowH, 6) : 6;
+  const MAX = 800;
+  let html = '';
+  hourly.forEach(function(d) {
+    if (d.h < startH || d.h > 17) return;
+    const kwh = (d.irr * 6 * 0.15 / 1000).toFixed(2);
+    const pct = Math.round((d.irr / MAX) * 100);
+    const col = d.irr >= 250 ? '#22c55e' : d.irr >= 100 ? '#eab308' : '#64748b';
+    html += '<div style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid #0f172a">'
+      + '<span style="font-size:13px;font-weight:700;width:50px">' + String(d.h).padStart(2,'0') + ':00</span>'
+      + '<span style="font-size:15px;width:24px;text-align:center">' + d.icon + '</span>'
+      + '<div style="flex:1;margin:0 8px;height:4px;background:#0f172a;border-radius:2px"><div style="height:100%;width:' + pct + '%;background:' + col + ';border-radius:2px"></div></div>'
+      + '<span style="font-size:11px;color:' + col + ';width:60px;text-align:right">' + d.irr + 'W/m²</span>'
+      + '<span style="font-size:12px;font-weight:700;color:' + col + ';width:60px;text-align:right">~' + kwh + 'kWh</span>'
+      + '</div>';
+  });
+  if (!html) html = '<div style="color:#475569;text-align:center;padding:20px">No data for this period</div>';
+  document.getElementById('fc-content').innerHTML = html;
+  document.getElementById('fc-modal').classList.add('show');
 }
 fetchStatus();
 setInterval(fetchStatus, 5000);
