@@ -101,6 +101,7 @@ def trigger(rule_id, name, details, action, val):
 # EVALUASI RULE
 # ================================================================
 def check_rules():
+    global _a6_active
     if is_paused(): return
     soc, pv, ac_out, grid = state["soc"], state["pv"], state["ac_out"], state["grid_v"]
     if soc is None: return
@@ -120,17 +121,15 @@ def check_rules():
     # ────────────────────────────────────────────────────────────
     if grid is not None and grid < 200 and is_malam and soc >= 41:
         if ac_is_off() and debounce_ok("A6"):
-            global _a6_active
             _a6_active = True
             trigger("A6", "PLN MATI MALAM", [f"GRID={grid:.0f}V", f"SOC={soc:.0f}%"], "AC ON", "ON")
         return
 
     if check_timer("A7", grid is not None and grid >= 215 and is_malam and ac_is_on(), 30):
         if debounce_ok("A7"):
-            global _a6_active
             _a6_active = False
             trigger("A7", "PLN HIDUP KEMBALI", [f"GRID={grid:.0f}V stabil 30s"], "AC OFF", "OFF")
-        return
+            return
 
     if is_malam and soc < 61:
         if ac_is_on() and debounce_ok("A5") and not _a6_active:
