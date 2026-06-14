@@ -606,11 +606,7 @@ body{background:#0f172a;color:#e2e8f0;font-family:'JetBrains Mono',monospace;min
       <span class="status-value" id="s-bt">--</span>
     </div>
     <div class="status-row">
-      <span class="status-label">AUTOMATION</span>
-      <span class="status-value" id="s-auto">--</span>
-    </div>
-    <div class="status-row">
-      <span class="status-label">RULE LAST</span>
+      <span class="status-label">LAST RULE</span>
       <span class="status-value dim" id="s-rule">--</span>
     </div>
   </div>
@@ -800,15 +796,14 @@ function applyStatus(d) {
   btEl.textContent = d.bt_active ? `ACTIVE (${d.bt_uptime})` : 'INACTIVE';
   btEl.className = 'status-value ' + (d.bt_active?'green':'red');
 
-  // AUTOMATION
-  const autoEl = document.getElementById('s-auto');
-  if (d.auto_paused) { autoEl.textContent='PAUSED'; autoEl.className='status-value yellow'; }
-  else if (d.auto_active) { autoEl.textContent='ACTIVE'; autoEl.className='status-value green'; }
-  else { autoEl.textContent='INACTIVE'; autoEl.className='status-value red'; }
-
-  // RULE LAST
-  document.getElementById('s-rule').textContent = d.last_rule || '--';
-  const ab=document.getElementById('btn-auto');if(ab)ab.textContent=d.auto_paused?'▶ Resume Automation':'⏸ Pause Automation';
+  // LAST RULE + auto status
+  const ruleEl = document.getElementById('s-rule');
+  const autoStatus = d.auto_paused ? 'PAUSED' : d.auto_active ? 'AUTO ON' : 'INACTIVE';
+  ruleEl.textContent = (d.last_rule || '--') + ' · ' + autoStatus;
+  ruleEl.className = 'status-value dim';
+  window._autoPaused = d.auto_paused;
+  const ab=document.getElementById('btn-auto');
+  if(ab) ab.textContent=d.auto_paused?'▶ Resume Automation':'⏸ Pause Automation';
 
 
 
