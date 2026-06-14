@@ -571,14 +571,18 @@ body{background:#0f172a;color:#e2e8f0;font-family:'JetBrains Mono',monospace;min
 
   <!-- STATUS -->
   <!-- WEATHER -->
-  <div class="status-card" id="weather-card" style="display:none">
-    <div class="status-row">
-      <span class="status-label">TODAY</span>
-      <span class="status-value" id="w-today">--</span>
-    </div>
-    <div class="status-row">
-      <span class="status-label">TOMORROW</span>
-      <span class="status-value" id="w-tomorrow">--</span>
+  <div id="weather-card" style="display:none;margin-bottom:10px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div style="background:#1e293b;border:1px solid #334155;border-radius:10px;padding:12px;text-align:center;cursor:pointer" onclick="showForecast('today')">
+        <div style="font-size:22px;margin-bottom:4px" id="w-today-icon">--</div>
+        <div style="font-size:10px;color:#64748b;font-weight:700;letter-spacing:1px;margin-bottom:4px">TODAY</div>
+        <div style="font-size:13px;font-weight:700;color:#eab308" id="w-today">--</div>
+      </div>
+      <div style="background:#1e293b;border:1px solid #334155;border-radius:10px;padding:12px;text-align:center;cursor:pointer" onclick="showForecast('tomorrow')">
+        <div style="font-size:22px;margin-bottom:4px" id="w-tmr-icon">--</div>
+        <div style="font-size:10px;color:#64748b;font-weight:700;letter-spacing:1px;margin-bottom:4px">TOMORROW</div>
+        <div style="font-size:13px;font-weight:700;color:#eab308" id="w-tomorrow">--</div>
+      </div>
     </div>
   </div>
 
@@ -882,10 +886,11 @@ function applyStatus(d) {
   if (d.weather) {
     wCard.style.display = '';
     const w = d.weather;
-    document.getElementById('w-today').textContent =
-      `${w.today.icon} ${w.today.pv_est !== null ? 'est. ~'+w.today.pv_est+' kWh' : '--'}`;
-    document.getElementById('w-tomorrow').textContent =
-      `${w.tomorrow.icon} ${w.tomorrow.pv_est !== null ? 'est. ~'+w.tomorrow.pv_est+' kWh' : '--'}`;
+    document.getElementById('w-today-icon').textContent = w.today.icon || '--';
+    document.getElementById('w-today').textContent = w.today.pv_est !== null ? 'est. ~'+w.today.pv_est+' kWh' : '--';
+    document.getElementById('w-tmr-icon').textContent = w.tomorrow.icon || '--';
+    document.getElementById('w-tomorrow').textContent = w.tomorrow.pv_est !== null ? 'est. ~'+w.tomorrow.pv_est+' kWh' : '--';
+    window._weatherData = w;
   } else {
     wCard.style.display = 'none';
   }
