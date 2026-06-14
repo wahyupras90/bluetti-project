@@ -464,7 +464,7 @@ body{background:#0f172a;color:#e2e8f0;font-family:'JetBrains Mono',monospace;min
   cursor:pointer;margin-bottom:8px;letter-spacing:1px;transition:all 0.15s}
 .btn-pause{width:100%;padding:11px;border-radius:8px;border:1px solid #334155;
   background:#1e293b;color:#94a3b8;font-family:'JetBrains Mono',monospace;
-  font-size:12px;cursor:pointer;margin-bottom:6px;transition:all 0.15s}
+  font-size:14px;font-weight:700;cursor:pointer;margin-bottom:6px;transition:all 0.15s}
 .btn-pause:hover{border-color:#0ea5e9;color:#e0f2fe}
 
 /* LOG */
@@ -477,7 +477,7 @@ body{background:#0f172a;color:#e2e8f0;font-family:'JetBrains Mono',monospace;min
 /* SYSTEM POPUP */
 .sys-btn{width:100%;padding:11px;border-radius:8px;border:1px solid #334155;
   background:#1e293b;color:#94a3b8;font-family:'JetBrains Mono',monospace;
-  font-size:12px;cursor:pointer;margin-bottom:6px;letter-spacing:1px}
+  font-size:14px;font-weight:700;cursor:pointer;margin-bottom:6px;letter-spacing:1px}
 .sys-btn:hover{border-color:#0ea5e9;color:#e0f2fe}
 .sys-row{display:flex;justify-content:space-between;padding:6px 0;
   border-bottom:1px solid #0f172a;font-size:13px}
