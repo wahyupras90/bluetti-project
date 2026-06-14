@@ -576,6 +576,10 @@ body{background:#0f172a;color:#e2e8f0;font-family:'JetBrains Mono',monospace;min
       </div>
     </div>
     <div class="status-row">
+      <span class="status-label">BAT TREND</span>
+      <span class="status-value" id="s-bat-trend">--</span>
+    </div>
+    <div class="status-row">
       <span class="status-label">TIME REM</span>
       <span class="status-value" id="s-timerem">--</span>
     </div>
@@ -585,8 +589,16 @@ body{background:#0f172a;color:#e2e8f0;font-family:'JetBrains Mono',monospace;min
       <span class="status-value" id="s-pv">--W</span>
     </div>
     <div class="status-row">
+      <span class="status-label">SOLAR EFF</span>
+      <span class="status-value" id="s-solar-eff">--</span>
+    </div>
+    <div class="status-row">
       <span class="status-label">LOAD</span>
       <span class="status-value" id="s-load">--W</span>
+    </div>
+    <div class="status-row">
+      <span class="status-label">NET</span>
+      <span class="status-value" id="s-net">--</span>
     </div>
     <div class="status-row">
       <span class="status-label">GRID</span>
@@ -771,6 +783,38 @@ function applyStatus(d) {
   // PV, LOAD
   document.getElementById('s-pv').textContent   = d.pv   !== null ? `${d.pv}W`    : '--W';
   document.getElementById('s-load').textContent = d.ac_out !== null ? `${d.ac_out}W` : '--W';
+
+  // NET = PV - LOAD
+  const netEl = document.getElementById('s-net');
+  if (d.pv !== null && d.ac_out !== null) {
+    const net = Math.round(d.pv - d.ac_out);
+    netEl.textContent = (net >= 0 ? '+' : '') + net + 'W';
+    netEl.className = 'status-value ' + (net > 0 ? 'green' : net < 0 ? 'red' : '');
+  } else { netEl.textContent = '--'; netEl.className = 'status-value'; }
+
+  // SOLAR EFF = PV actual vs forecast
+  const sefEl = document.getElementById('s-solar-eff');
+  if (d.forecast_irr && d.forecast_irr > 0 && d.pv !== null && d.pv > 0) {
+    const eff = Math.round((d.pv / d.forecast_irr) * 100);
+    sefEl.textContent = eff + '% of fcst';
+    sefEl.className = 'status-value ' + (eff >= 70 ? 'green' : eff >= 40 ? 'yellow' : 'red');
+  } else { sefEl.textContent = '--'; sefEl.className = 'status-value dim'; }
+
+  // BAT TREND
+  if (window._lastSoc !== undefined && window._lastSocTime) {
+    const dt = (Date.now() - window._lastSocTime) / 60000;
+    if (dt > 0.5 && dt < 10) {
+      const trend = (d.soc - window._lastSoc) / dt;
+      const tStr = (trend >= 0 ? '↑ +' : '↓ ') + Math.abs(trend).toFixed(2) + '%/min';
+      const tEl = document.getElementById('s-bat-trend');
+      tEl.textContent = tStr;
+      tEl.className = 'status-value ' + (trend > 0.05 ? 'green' : trend < -0.05 ? 'red' : 'dim');
+    }
+  }
+  if (window._lastSoc !== d.soc) {
+    window._lastSoc = d.soc;
+    window._lastSocTime = Date.now();
+  }
 
   // GRID
   const gv = d.grid_v;
