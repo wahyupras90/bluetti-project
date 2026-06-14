@@ -600,12 +600,11 @@ body{background:#0f172a;color:#e2e8f0;font-family:'Courier New',monospace;min-he
   </div>
 
   <!-- TOMBOL AC -->
-  <button class="btn-ac" id="btn-ac" onclick="showAcModal()">--</button>
+  <button class="btn-ac" id="btn-ac" onclick="const on=document.getElementById('s-ac').textContent==='ON';if(confirm(on?'Turn AC OFF?':'Turn AC ON?'))fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'ac',value:on?'OFF':'ON'})}).then(()=>setTimeout(fetchStatus,1000))">--</button>
   <button class="btn-ac" onclick="showSystemPopup()" style="background:#1e3a5f;color:#e0f2fe;border:1px solid #0ea5e9;margin-bottom:8px">🖥️ System Status</button>
 
   <!-- TOMBOL AUTOMATION -->
-  <button class="btn-pause" onclick="showModal('pause')">⏸ Pause automation</button>
-  <button class="btn-pause" onclick="showModal('resume')">▶ Resume automation</button>
+  <button class="btn-pause" id="btn-auto" onclick="const p=document.getElementById('s-auto').textContent==='PAUSED';if(confirm(p?'Resume automation?':'Pause automation?'))fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:p?'resume':'pause'})}).then(()=>setTimeout(fetchStatus,1000))">⏸ Pause Automation</button>
 
 
   <!-- LOG -->
@@ -795,6 +794,7 @@ function applyStatus(d) {
 
   // RULE LAST
   document.getElementById('s-rule').textContent = d.last_rule || '--';
+  const ab=document.getElementById('btn-auto');if(ab)ab.textContent=d.auto_paused?'▶ Resume Automation':'⏸ Pause Automation';
 
   // EST A2
   const a2El = document.getElementById('s-esta2');
