@@ -649,10 +649,7 @@ body{background:#0f172a;color:#e2e8f0;font-family:'JetBrains Mono',monospace;min
     <button class="btn-grid-item btn-sys-grid" onclick="showSystemPopup()">🖥️ System</button>
     <button class="btn-grid-item btn-log-grid" onclick="toggleLog()">📋 Log</button>
   </div>
-  <!-- LOG -->
-  <div class="log-box" id="log-box">
-    <span class="dim">Loading log...</span>
-  </div>
+
 
 </div>
 
@@ -1071,6 +1068,12 @@ async function _fetch(){
 }
 })();
 
+function toggleLog(){
+  document.getElementById('log-modal').classList.add('show');
+}
+function closeLogModal(){
+  document.getElementById('log-modal').classList.remove('show');
+}
 fetchStatus();
 setInterval(fetchStatus, 5000);
 
