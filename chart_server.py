@@ -7,7 +7,7 @@ Service : chart.service
 
 import os, csv, json, re, subprocess, threading, urllib.request
 from datetime import datetime, timedelta
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 import paho.mqtt.client as mqtt
 
 CSV_FILE      = "/tmp/bluetti_history.csv"
@@ -1412,4 +1412,4 @@ if __name__ == "__main__":
     t.start()
     import time; time.sleep(1.5)
     print(f"Bluetti Dashboard :  http://0.0.0.0:{PORT}")
-    HTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
+    ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
