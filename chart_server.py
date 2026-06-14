@@ -579,10 +579,7 @@ body{background:#0f172a;color:#e2e8f0;font-family:'JetBrains Mono',monospace;min
       <span class="status-label">TIME REM</span>
       <span class="status-value" id="s-timerem">--</span>
     </div>
-    <div class="status-row">
-      <span class="status-label">EST A2</span>
-      <span class="status-value" id="s-esta2">--</span>
-    </div>
+
     <div class="status-row">
       <span class="status-label">PV</span>
       <span class="status-value" id="s-pv">--W</span>
@@ -822,18 +819,7 @@ function applyStatus(d) {
   document.getElementById('s-rule').textContent = d.last_rule || '--';
   const ab=document.getElementById('btn-auto');if(ab)ab.textContent=d.auto_paused?'▶ Resume Automation':'⏸ Pause Automation';
 
-  // EST A2
-  const a2El = document.getElementById('s-esta2');
-  if (d.est_a2 === null || d.est_a2 === undefined) {
-    a2El.textContent = '--'; a2El.className = 'status-value dim';
-  } else if (d.est_a2 === 0) {
-    a2El.textContent = 'SOC ≤ 40%'; a2El.className = 'status-value red';
-  } else {
-    const h = Math.floor(d.est_a2/60), m = d.est_a2%60;
-    const ts = h>0 ? `${h}j ${m}m` : `${m}m`;
-    a2El.textContent = ts;
-    a2El.className = 'status-value ' + (d.est_a2>120?'green':d.est_a2>60?'yellow':'red');
-  }
+
 
   // WEATHER
   const wCard = document.getElementById('weather-card');
