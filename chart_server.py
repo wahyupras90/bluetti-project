@@ -598,12 +598,8 @@ body{background:#0f172a;color:#e2e8f0;font-family:'JetBrains Mono',monospace;min
     </div>
 
     <div class="status-row">
-      <span class="status-label">DATA</span>
-      <span class="status-value" id="s-data">--</span>
-    </div>
-    <div class="status-row">
-      <span class="status-label">LAST UPDATE</span>
-      <span class="status-value" id="s-lastupd">--</span>
+      <span class="status-label">UPDATE</span>
+      <span class="status-value" id="s-update">--</span>
     </div>
     <div class="status-row">
       <span class="status-label">BLUETTI CONN</span>
@@ -793,11 +789,11 @@ function applyStatus(d) {
   acEl.textContent = d.ac_on || '--';
   acEl.className = 'status-value ' + (d.ac_on==='ON'?'green':d.ac_on==='OFF'?'red':'dim');
 
-  // DATA
-  document.getElementById('s-data').innerHTML = d.fresh
-    ? '<span class="green">FRESH</span>' : '<span class="red">STALE</span>';
-  document.getElementById('s-lastupd').textContent = d.last_upd;
-  document.getElementById('s-lastupd').className = 'status-value ' + (d.fresh ? '' : 'red');
+  // UPDATE gabungan
+  const updEl = document.getElementById('s-update');
+  updEl.innerHTML = d.fresh
+    ? `<span class="green">FRESH</span> · ${d.last_upd}`
+    : `<span class="red">STALE</span> · ${d.last_upd}`;
 
   // BLUETTI CONN
   const btEl = document.getElementById('s-bt');
