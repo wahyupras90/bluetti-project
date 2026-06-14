@@ -11,6 +11,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 import paho.mqtt.client as mqtt
 
 CSV_FILE      = "/tmp/bluetti_history.csv"
+CSV_DISK      = os.path.expanduser("~/bluetti_history.csv")
 LOG_FILE      = os.path.expanduser("~/bluetti_log.txt")
 LAST_RULE_FILE= os.path.expanduser("~/bluetti_last_rule.txt")
 PAUSE_FLAG    = "/tmp/automation_paused"
@@ -308,24 +309,42 @@ def calc_est_a2():
 # CHART DATA
 # ================================================================
 def load_csv(hours):
-    if not os.path.exists(CSV_FILE): return []
-    cutoff = datetime.now() - timedelta(hours=hours)
+    # Baca dari disk (history lama) + RAM (data terbaru), merge dan deduplikasi
+    import csv as _csv
+    from datetime import datetime as _dt, timedelta as _td
+    cutoff = _dt.now() - _td(hours=hours)
+    seen = set()
     rows = []
-    try:
-        with open(CSV_FILE) as f:
-            for row in csv.DictReader(f):
-                try:
-                    ts = datetime.strptime(row["timestamp"],"%Y-%m-%d %H:%M:%S")
-                    if ts < cutoff: continue
-                    rows.append({
-                        "ts":     ts.strftime("%H:%M") if hours<=24 else ts.strftime("%d/%m %H:%M"),
-                        "soc":    float(row["soc"])    if row.get("soc")    else None,
-                        "pv":     float(row["pv"])     if row.get("pv")     else None,
-                        "ac_out": float(row["ac_out"]) if row.get("ac_out") else None,
-                    })
-                except: continue
-    except: pass
-    return rows
+    for path in [CSV_DISK, CSV_FILE]:
+        if not os.path.exists(path): continue
+        try:
+            with open(path) as f:
+                for row in _csv.DictReader(f):
+                    try:
+                        ts = _dt.strptime(row["timestamp"], "%Y-%m-%d %H:%M:%S")
+                        if ts < cutoff: continue
+                        key = row["timestamp"]
+                        if key in seen: continue
+                        seen.add(key)
+                        rows.append(row)
+                    except: continue
+        except: continue
+    rows.sort(key=lambda r: r["timestamp"])
+    if not rows: return []
+    # Konversi ke format yang diharapkan get_chart
+    result = []
+    for row in rows:
+        try:
+            ts = datetime.strptime(row["timestamp"], "%Y-%m-%d %H:%M:%S")
+            label_ts = ts.strftime("%H:%M") if hours <= 24 else ts.strftime("%d/%m %H:%M")
+            result.append({
+                "ts":     label_ts,
+                "soc":    float(row["soc"])    if row.get("soc")    else None,
+                "pv":     float(row["pv"])     if row.get("pv")     else None,
+                "ac_out": float(row["ac_out"]) if row.get("ac_out") else None,
+            })
+        except: continue
+    return result
 
 def load_rules(hours):
     if not os.path.exists(LOG_FILE): return []
