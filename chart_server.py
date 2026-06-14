@@ -239,6 +239,7 @@ def get_status():
         "log": log_lines,
         "est_a2": calc_est_a2(),
         "weather": get_weather(),
+        "forecast_irr": (get_weather() or {}).get("irr_now"),
     }
 
 
@@ -256,6 +257,7 @@ def get_weather():
         url = (f"https://api.open-meteo.com/v1/forecast"
                f"?latitude={LAT}&longitude={LON}"
                f"&daily=weathercode,shortwave_radiation_sum"
+               f"&hourly=shortwave_radiation"
                f"&timezone=Asia%2FJakarta&forecast_days=2")
         with urllib.request.urlopen(url, timeout=5) as r:
             d = json.loads(r.read())
@@ -274,9 +276,20 @@ def get_weather():
             wh_m2 = r_val * 277.78
             est_wh = wh_m2 * 6 * 0.15
             return round(est_wh / 1000, 1)
+        # Ambil irr jam sekarang dan +1 jam
+        hourly_times = d.get("hourly", {}).get("time", [])
+        hourly_irr   = d.get("hourly", {}).get("shortwave_radiation", [])
+        from datetime import datetime as _dt
+        now_str  = _dt.now().strftime("%Y-%m-%dT%H:00")
+        nxt_str  = _dt.now().replace(minute=0,second=0,microsecond=0)
+        from datetime import timedelta as _td
+        nxt_str  = (_dt.now().replace(minute=0,second=0,microsecond=0) + _td(hours=1)).strftime("%Y-%m-%dT%H:00")
+        irr_now  = hourly_irr[hourly_times.index(now_str)]  if now_str in hourly_times else None
+        irr_next = hourly_irr[hourly_times.index(nxt_str)]  if nxt_str in hourly_times else None
         result = {
             "today":    {"icon": wcode_to_icon(codes[0] if codes else None),    "pv_est": rad_to_kwh(rad[0] if rad else None)},
             "tomorrow": {"icon": wcode_to_icon(codes[1] if len(codes)>1 else None), "pv_est": rad_to_kwh(rad[1] if len(rad)>1 else None)},
+            "irr_now": irr_now, "irr_next": irr_next,
         }
         _weather_cache["data"] = result
         _weather_cache["ts"]   = now
