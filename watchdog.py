@@ -32,6 +32,12 @@ def reset_retries():
         os.remove(RETRY_FILE)
     except: pass
 
+def get_uptime_min():
+    try:
+        with open("/proc/uptime") as f:
+            return float(f.read().split()[0]) / 60
+    except: return 999
+
 def last_csv_ts():
     if not os.path.exists(CSV_FILE):
         return None
@@ -54,12 +60,16 @@ def service_active(name):
 
 def restart_service(name):
     try:
-        subprocess.run(["sudo","systemctl","restart",name],
-                       timeout=15,check=True)
+        subprocess.run(["sudo","hciconfig","hci0","down"], timeout=5)
+        subprocess.run(["sudo","hciconfig","hci0","up"],   timeout=5)
+        subprocess.run(["sudo","systemctl","restart",name], timeout=15,check=True)
         return True
     except: return False
 
 def main():
+    if get_uptime_min() < 5.0:
+        return  # Grace period — Pi baru nyala
+
     if os.path.exists("/tmp/automation_paused"):
         log("PAUSED — skip bluetti check")
         return
@@ -73,10 +83,9 @@ def main():
 
     last_ts = last_csv_ts()
     if last_ts is None:
-        log("CSV kosong — skip")
-        return
-
-    elapsed_min = (datetime.now() - last_ts).total_seconds() / 60
+        elapsed_min = 999  # CSV kosong setelah grace period = BLE hang sejak awal
+    else:
+        elapsed_min = (datetime.now() - last_ts).total_seconds() / 60
 
     if elapsed_min <= STALE_MIN:
         # Data fresh — reset counter
