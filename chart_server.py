@@ -596,10 +596,7 @@ body{background:#0f172a;color:#e2e8f0;font-family:'JetBrains Mono',monospace;min
       <span class="status-label">AC</span>
       <span class="status-value" id="s-ac">--</span>
     </div>
-    <div class="status-row">
-      <span class="status-label">MQTT</span>
-      <span class="status-value" id="s-mqtt">--</span>
-    </div>
+
     <div class="status-row">
       <span class="status-label">DATA</span>
       <span class="status-value" id="s-data">--</span>
@@ -796,9 +793,7 @@ function applyStatus(d) {
   acEl.textContent = d.ac_on || '--';
   acEl.className = 'status-value ' + (d.ac_on==='ON'?'green':d.ac_on==='OFF'?'red':'dim');
 
-  // MQTT, DATA
-  document.getElementById('s-mqtt').innerHTML = d.mqtt_ok
-    ? '<span class="green">OK</span>' : '<span class="red">FAIL</span>';
+  // DATA
   document.getElementById('s-data').innerHTML = d.fresh
     ? '<span class="green">FRESH</span>' : '<span class="red">STALE</span>';
   document.getElementById('s-lastupd').textContent = d.last_upd;
