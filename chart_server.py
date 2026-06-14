@@ -1334,9 +1334,11 @@ def do_action(body):
             _mqtt_client.publish(TOPIC_CMD, data.get("value","OFF"))
         elif t == "pause":
             open(PAUSE_FLAG,"w").close()
+            os.system("sudo systemctl stop bluetti")
         elif t == "resume":
             try: os.remove(PAUSE_FLAG)
             except: pass
+            os.system("sudo systemctl start bluetti")
     except: pass
 
 # ================================================================
