@@ -2,9 +2,11 @@
 import os, subprocess, csv
 from datetime import datetime, timedelta
 
-CSV_FILE = "/tmp/bluetti_history.csv"
-LOG_FILE = os.path.expanduser("~/bluetti_log.txt")
-STALE_MIN = 10
+CSV_FILE    = "/tmp/bluetti_history.csv"
+LOG_FILE    = os.path.expanduser("~/bluetti_log.txt")
+RETRY_FILE  = "/tmp/bluetti_retries"
+STALE_MIN   = 10
+MAX_RETRIES = 3
 
 def log(msg):
     ts = datetime.now().strftime("%H:%M:%S")
@@ -13,6 +15,21 @@ def log(msg):
     try:
         with open(LOG_FILE, "a") as f:
             f.write(line + "\n")
+    except: pass
+
+def get_retries():
+    try:
+        return int(open(RETRY_FILE).read().strip())
+    except: return 0
+
+def set_retries(n):
+    try:
+        open(RETRY_FILE, "w").write(str(n))
+    except: pass
+
+def reset_retries():
+    try:
+        os.remove(RETRY_FILE)
     except: pass
 
 def last_csv_ts():
@@ -46,10 +63,12 @@ def main():
     if os.path.exists("/tmp/automation_paused"):
         log("PAUSED — skip bluetti check")
         return
+
     if not service_active("bluetti"):
         log("bluetti.service INACTIVE → start")
         if restart_service("bluetti"):
             log("berhasil di-start")
+            reset_retries()
         return
 
     last_ts = last_csv_ts()
@@ -58,10 +77,22 @@ def main():
         return
 
     elapsed_min = (datetime.now() - last_ts).total_seconds() / 60
-    if elapsed_min > STALE_MIN:
-        log(f"DATA STALE {elapsed_min:.0f}m → restart bluetti")
-        if restart_service("bluetti"):
-            log("berhasil di-restart")
+
+    if elapsed_min <= STALE_MIN:
+        # Data fresh — reset counter
+        reset_retries()
+        return
+
+    retries = get_retries()
+
+    if retries >= MAX_RETRIES:
+        log(f"DATA STALE {elapsed_min:.0f}m — sudah {retries}x restart, perangkat tidak terjangkau, skip")
+        return
+
+    log(f"DATA STALE {elapsed_min:.0f}m → restart bluetti (percobaan {retries+1}/{MAX_RETRIES})")
+    if restart_service("bluetti"):
+        log("berhasil di-restart")
+        set_retries(retries + 1)
 
 if __name__ == "__main__":
     main()
