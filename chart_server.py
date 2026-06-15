@@ -230,7 +230,7 @@ def get_status():
     return {
         "time": now,
         "soc":  s["soc"], "pv": s["pv"], "ac_out": s["ac_out"],
-        "grid_v": s["grid_v"], "ac_on": s["ac_on"], "dc_on": s.get("dc_on","OFF"), "dc_out": s.get("dc_out",0),
+        "grid_v": s["grid_v"], "ac_on": s["ac_on"], "dc_on": s.get("dc_on","OFF"), "dc_out": s.get("dc_out",0), "total_out": (s.get("ac_out") or 0) + s.get("dc_out",0),
         "time_rem": time_rem, "time_rem_dir": time_rem_dir,
         "mqtt_ok": s["mqtt_ok"], "fresh": fresh, "last_upd": last_upd,
         "bt_active": bt_active, "bt_uptime": bt_uptime,
@@ -845,12 +845,13 @@ function applyStatus(d) {
 
   // PV, LOAD
   document.getElementById('s-pv').textContent   = d.pv   !== null ? `${d.pv}W`    : '--W';
-  document.getElementById('s-load').textContent = d.ac_out !== null ? `${d.ac_out}W` : '--W';
+  const totalOut = (d.ac_out||0) + (d.dc_out||0);
+  document.getElementById('s-load').textContent = `${totalOut}W`;
 
   // NET = PV - LOAD
   const netEl = document.getElementById('s-net');
   if (d.pv !== null && d.ac_out !== null) {
-    const net = Math.round(d.pv - d.ac_out);
+    const net = Math.round(d.pv - ((d.ac_out||0)+(d.dc_out||0)));
     netEl.textContent = (net >= 0 ? '+' : '') + net + 'W';
     netEl.className = 'status-value ' + (net > 0 ? 'green' : net < 0 ? 'red' : '');
   } else { netEl.textContent = '--'; netEl.className = 'status-value'; }
