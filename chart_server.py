@@ -212,6 +212,25 @@ def get_status():
         elif diff < -TIME_BALANCE_W:
             time_rem = f"{ts} ↓"; time_rem_dir = -1
 
+    # Absorbed PV hari ini dari CSV
+    absorbed_pct = None
+    try:
+        import csv as _csv
+        from datetime import datetime as _dt4
+        today_prefix = _dt4.now().strftime("%Y-%m-%d")
+        pv_today = 0.0
+        for path in [os.path.expanduser("~/bluetti_history.csv"), "/tmp/bluetti_history.csv"]:
+            if not os.path.exists(path): continue
+            with open(path) as _f:
+                for row in _csv.DictReader(_f):
+                    if row.get("timestamp","").startswith(today_prefix):
+                        pv_today += float(row.get("pv") or 0) / 60 / 1000
+        w = get_weather()
+        if w and w.get("today",{}).get("pv_est"):
+            pv_est_total = w["today"]["pv_est"]
+            absorbed_pct = min(round(pv_today / pv_est_total * 100), 100) if pv_est_total > 0 else None
+    except: pass
+
     # Log terakhir
     last_rule = "--"
     try:
@@ -239,6 +258,7 @@ def get_status():
         "log": log_lines,
         "est_a2": calc_est_a2(),
         "weather": get_weather(),
+        "absorbed_pct": absorbed_pct,
         "forecast_irr": (get_weather() or {}).get("irr_next" if datetime.now().minute >= 30 else "irr_now"),
     }
 
@@ -336,9 +356,17 @@ def get_weather():
         else:
             irr_trend = ''
 
+        # Estimasi sisa kWh hari ini (jam sekarang+1 sampai 17:00)
+        from datetime import datetime as _dt3
+        now_h = _dt3.now().hour
+        rem_irr = [hourly_irr[i] for i,t in enumerate(hourly_times)
+                   if t.startswith(today_str) and now_h < int(t[11:13]) <= 17
+                   and i < len(hourly_irr)]
+        rem_kwh = round(sum(r * 0.715 / 1000 for r in rem_irr), 2) if rem_irr else None
+
         result = {
             "today":    {"icon": icon_now, "pv_est": rad_to_kwh(rad[0] if rad else None),
-                         "temp": temp_today, "irr_now": irr_now},
+                         "temp": temp_today, "irr_now": irr_now, "rem_kwh": rem_kwh},
             "tomorrow": {"icon": wcode_to_icon(codes[1] if len(codes)>1 else None), "pv_est": rad_to_kwh(rad[1] if len(rad)>1 else None),
                          "temp": temp_tomorrow, "avg_irr": avg_irr_tomorrow, "irr_trend": irr_trend},
             "irr_now": irr_now, "irr_next": irr_next,
@@ -984,7 +1012,12 @@ function applyStatus(d) {
     document.getElementById('w-today-icon').textContent = w.today.icon || '--';
     document.getElementById('w-today-temp').textContent = w.today.temp !== null ? w.today.temp+'°C' : '--°C';
     document.getElementById('w-today-irr').textContent = w.today.irr_now !== null ? '⚡ '+w.today.irr_now+' W/m²' : '⚡ --';
-    document.getElementById('w-today').textContent = w.today.pv_est !== null ? 'est. ~'+w.today.pv_est+' kWh' : '--';
+    const remKwh = w.today.rem_kwh;
+    const absPct = d.absorbed_pct;
+    const todayStr = remKwh !== null && remKwh !== undefined
+      ? '~'+remKwh+' kWh' + (absPct !== null && absPct !== undefined ? ' · '+absPct+'% ✓' : '')
+      : (w.today.pv_est !== null ? 'est. ~'+w.today.pv_est+' kWh' : '--');
+    document.getElementById('w-today').textContent = todayStr;
     document.getElementById('w-tmr-icon').textContent = w.tomorrow.icon || '--';
     document.getElementById('w-tmr-temp').textContent = w.tomorrow.temp !== null ? w.tomorrow.temp+'°C' : '--°C';
     const tIrr = w.tomorrow.avg_irr; const tTrend = w.tomorrow.irr_trend || '';
