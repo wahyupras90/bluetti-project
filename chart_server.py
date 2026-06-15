@@ -1016,9 +1016,18 @@ function applyStatus(d) {
     document.getElementById('w-today-irr').textContent = w.today.irr_now !== null ? '⚡ '+w.today.irr_now+' W/m²' : '⚡ --';
     const remKwh = w.today.rem_kwh;
     const absPct = d.absorbed_pct;
-    const todayStr = remKwh !== null && remKwh !== undefined
-      ? '~'+remKwh+' kWh' + (absPct !== null && absPct !== undefined ? ' · '+absPct+'% ✓' : '')
-      : (w.today.pv_est !== null ? 'est. ~'+w.today.pv_est+' kWh' : '--');
+    let todayStr;
+    if (remKwh !== null && remKwh !== undefined && remKwh > 0) {
+      // Siang: tampilkan sisa + absorbed
+      todayStr = '~'+remKwh+' kWh' + (absPct !== null && absPct !== undefined ? ' · '+absPct+'% ✓' : '');
+    } else if (absPct !== null && absPct !== undefined) {
+      // Malam/setelah 17:00: tampilkan total absorbed
+      const pvEst = w.today.pv_est;
+      const pvActual = pvEst ? Math.round(pvEst * absPct / 100 * 10) / 10 : null;
+      todayStr = (pvActual ? pvActual+' kWh' : '') + ' · '+absPct+'% ✓';
+    } else {
+      todayStr = w.today.pv_est !== null ? 'est. ~'+w.today.pv_est+' kWh' : '--';
+    }
     document.getElementById('w-today').textContent = todayStr;
     document.getElementById('w-tmr-icon').textContent = w.tomorrow.icon || '--';
     document.getElementById('w-tmr-temp').textContent = w.tomorrow.temp !== null ? w.tomorrow.temp+'°C' : '--°C';
