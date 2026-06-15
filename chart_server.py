@@ -617,9 +617,9 @@ body{background:#0f172a;color:#e2e8f0;font-family:'JetBrains Mono',monospace;min
     </div>
     <div class="status-row">
       <span class="status-label">SOC</span>
-      <div style="text-align:right">
+      <div style="display:flex;align-items:center;gap:8px;justify-content:flex-end">
+        <div class="soc-bar" style="width:80px;margin-top:0"><div class="soc-fill" id="s-soc-bar" style="width:0%"></div></div>
         <span class="status-value" id="s-soc">--%</span>
-        <div class="soc-bar"><div class="soc-fill" id="s-soc-bar" style="width:0%"></div></div>
       </div>
     </div>
     <div class="status-row">
