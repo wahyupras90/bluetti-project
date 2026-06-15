@@ -407,7 +407,7 @@ def load_csv(hours):
                 "ts":     label_ts,
                 "soc":    float(row["soc"])    if row.get("soc")    else None,
                 "pv":     float(row["pv"])     if row.get("pv")     else None,
-                "ac_out": float(row["ac_out"]) if row.get("ac_out") else None,
+                "ac_out": float(row.get("total_out") or row.get("ac_out") or 0),
             })
         except: continue
     return result
