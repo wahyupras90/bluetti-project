@@ -689,6 +689,12 @@ body{background:#0f172a;color:#e2e8f0;font-family:'JetBrains Mono',monospace;min
 
   <div id="flow-view">
     <canvas id="flowCv" style="display:block;width:100%;background:#0f172a;border-radius:12px"></canvas>
+  <div class="health-card" style="margin-top:10px">
+    <div class="health-title">🔋 BATTERY HEALTH</div>
+    <div id="health-content">
+      <div class="health-note">Loading data...</div>
+    </div>
+  </div>
   </div>
 
   <div id="graph-view" style="display:none">
@@ -738,12 +744,7 @@ body{background:#0f172a;color:#e2e8f0;font-family:'JetBrains Mono',monospace;min
 
   <button class="reset-btn" onclick="resetZoom()">↺ Reset zoom</button>
 
-  <div class="health-card">
-    <div class="health-title">🔋 BATTERY HEALTH</div>
-    <div id="health-content">
-      <div class="health-note">Loading data...</div>
-    </div>
-  </div>
+
 
 </div>
 </div>
@@ -992,6 +993,8 @@ window.initFlow=function(){
   _fetch();setInterval(_fetch,5000);
   setTimeout(_start,300);
   window.addEventListener('resize',function(){_stop();setTimeout(_start,200);});
+  // Render battery health
+  fetch('/api/status').then(function(r){return r.json();}).then(function(d){if(typeof renderHealth==='function')renderHealth(d.degradation||null);});
 };
 
 function _stop(){if(raf){cancelAnimationFrame(raf);raf=null;}}
