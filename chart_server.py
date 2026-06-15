@@ -246,7 +246,7 @@ def get_status():
 LAT = -7.884277
 LON = 110.311251
 _weather_cache = {"data": None, "ts": 0}
-WEATHER_CACHE_SEC = 3600
+WEATHER_CACHE_SEC = 1800
 
 def get_weather():
     import time as _time
