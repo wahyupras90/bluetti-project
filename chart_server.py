@@ -409,7 +409,7 @@ def load_rules(hours):
 
 def calc_summary(rows):
     pv   = sum(r["pv"]     for r in rows if r["pv"]     is not None)/60/1000
-    load = sum(r["ac_out"] for r in rows if r["ac_out"] is not None)/60/1000
+    load = sum((r.get("total_out") or r.get("ac_out") or 0) for r in rows)/60/1000
     return {"pv":round(pv,3),"load":round(load,3),"diff":round(pv-load,3)}
 
 
@@ -725,7 +725,7 @@ body{background:#0f172a;color:#e2e8f0;font-family:'JetBrains Mono',monospace;min
       <span class="summary-value" id="sum-pv">—</span>
     </div>
     <div class="summary-row">
-      <span class="summary-label">⚡  AC consumption</span>
+      <span class="summary-label">⚡   Consumption</span>
       <span class="summary-value" id="sum-load">—</span>
     </div>
     <hr class="divider">
