@@ -43,8 +43,8 @@ state = {
     "soc": None, "pv": None, "ac_out": None, "grid_v": None, "ac_on": None,
 }
 
-_last_trigger = {f"A{i}": 0.0 for i in ["1", "1b", "2", "3", "4_pagi", "4_siang", "5", "6", "7"]}
-_timers = {"A2": None, "A4_siang": None, "A7": None}
+_last_trigger = {f"A{i}": 0.0 for i in ["1", "1b", "2", "3", "4", "5", "6", "7"]}
+_timers = {"A2": None, "A4": None, "A7": None}
 
 def now_sec(): return time.time()
 def ac_is_on(): return state["ac_on"] == "ON"
@@ -100,6 +100,9 @@ def trigger(rule_id, name, details, action, val):
 # ================================================================
 def check_rules():
     if is_paused(): return
+    if datetime.now().year < 2026:
+        log.warning("JAM TIDAK VALID — belum sync NTP, otomasi dibekukan")
+        return
     soc, pv, ac_out, grid = state["soc"], state["pv"], state["ac_out"], state["grid_v"]
     if soc is None: return
 
@@ -108,51 +111,51 @@ def check_rules():
     # 1. PROTEKSI ABSOLUT
     if check_timer("A2", soc <= 40, 30):
         if ac_is_on() and debounce_ok("A2"):
-            trigger("A2", "PROTEKSI BATERAI", [f"SOC={soc:.0f}% stabil 30s"], "AC OFF", "OFF")
+            trigger("A2", "BATT LOW", [f"SOC={soc:.0f}% stabil 30s"], "AC OFF", "OFF")
         return
 
     # 2. FASE MALAM / OUTAGE
     if grid is not None and grid < 200 and is_malam and soc >= 41:
         if ac_is_off() and debounce_ok("A6"):
-            trigger("A6", "PLN MATI MALAM", [f"GRID={grid:.0f}V", f"SOC={soc:.0f}%"], "AC ON", "ON")
+            trigger("A6", "GRID DOWN", [f"GRID={grid:.0f}V", f"SOC={soc:.0f}%"], "AC ON", "ON")
         return
 
     if check_timer("A7", grid is not None and grid >= 215 and is_malam and ac_is_on(), 30):
         if debounce_ok("A7"):
-            trigger("A7", "PLN HIDUP KEMBALI", [f"GRID={grid:.0f}V stabil 30s"], "AC OFF", "OFF")
+            trigger("A7", "GRID UP", [f"GRID={grid:.0f}V stabil 30s"], "AC OFF", "OFF")
         return
 
     if is_malam and soc < 61:
         grid_aman = (grid is None or grid >= 200)
         if ac_is_on() and debounce_ok("A5") and grid_aman:
-            trigger("A5", "STANDBY MALAM", [f"SOC={soc:.0f}% < 61%"], "AC OFF", "OFF")
+            trigger("A5", "NIGHT OFF", [f"SOC={soc:.0f}% < 61%"], "AC OFF", "OFF")
         return
 
     # 3. KICKSTART PAGI
     if is_time_range("06:00", "06:05") and soc >= 65:
         if ac_is_off() and debounce_ok("A1b"):
-            trigger("A1b", "KICKSTART JAM 6", [f"SOC={soc:.0f}% (>= 65)"], "AC ON", "ON")
+            trigger("A1b", "START 06", [f"SOC={soc:.0f}% (>= 65)"], "AC ON", "ON")
         return
 
     if is_time_range("07:00", "07:05") and (45 < soc < 65):
         if ac_is_off() and debounce_ok("A1"):
-            trigger("A1", "KICKSTART JAM 7", [f"SOC={soc:.0f}% (46 - 64)"], "AC ON", "ON")
+            trigger("A1", "START 07", [f"SOC={soc:.0f}% (46 - 64)"], "AC ON", "ON")
         return
 
     # 4. FASE SIANG: PEMUTUS (OFF)
     if is_time_range("06:30", "11:30") and soc <= 45:
-        if ac_is_on() and debounce_ok("A4_pagi"):
-            trigger("A4_pagi", "BUFFER PAGI OFF", [f"SOC={soc:.0f}% <= 45%"], "AC OFF", "OFF")
+        if ac_is_on() and debounce_ok("A4"):
+            trigger("A4", "MORN OFF", [f"SOC={soc:.0f}% <= 45%"], "AC OFF", "OFF")
         return
 
     if is_time_range("11:30", "15:30") and ac_is_on() and (pv is not None) and (ac_out is not None):
         a4_siang_cond = (soc <= 60) and (pv < ac_out)
-        if check_timer("A4_siang", a4_siang_cond, 900):
-            if debounce_ok("A4_siang"):
-                trigger("A4_siang", "SMART TRANSITION OFF", [f"SOC={soc:.0f}% <= 60%", f"PV={pv:.0f}W < LOAD={ac_out:.0f}W"], "AC OFF", "OFF")
+        if check_timer("A4", a4_siang_cond, 900):
+            if debounce_ok("A4"):
+                trigger("A4", "DAY OFF", [f"SOC={soc:.0f}% <= 60%", f"PV={pv:.0f}W < LOAD={ac_out:.0f}W"], "AC OFF", "OFF")
             return
     else:
-        check_timer("A4_siang", False, 900)
+        check_timer("A4", False, 900)
 
     # 5. FASE SIANG: RECOVERY (ON)
     if is_time_range("06:30", "15:30"):
@@ -163,7 +166,7 @@ def check_rules():
             a3_cond = (soc > 65 and pv is not None and pv > 200) or (soc > 75)
         if a3_cond:
             if ac_is_off() and debounce_ok("A3"):
-                trigger("A3", "RECOVERY SIANG", [f"SOC={soc:.0f}%"], "AC ON", "ON")
+                trigger("A3", "DAY ON", [f"SOC={soc:.0f}%"], "AC ON", "ON")
             return
 
 # ================================================================
