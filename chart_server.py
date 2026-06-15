@@ -293,8 +293,10 @@ def get_weather():
             return "⛈️"
         def rad_to_kwh(r_val):
             if r_val is None: return None
+            # Trina 715W: 715W per 1000 W/m², daily shortwave_radiation_sum dalam MJ/m²
+            # 1 MJ/m² = 277.78 Wh/m²
             wh_m2 = r_val * 277.78
-            est_wh = wh_m2 * 6 * 0.15
+            est_wh = wh_m2 * 0.715
             return round(est_wh / 1000, 1)
         # Ambil irr jam sekarang dan +1 jam
         hourly_times = d.get("hourly", {}).get("time", [])
