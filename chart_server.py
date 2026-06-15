@@ -684,13 +684,14 @@ body{background:#0f172a;color:#e2e8f0;font-family:'JetBrains Mono',monospace;min
 <!-- ══════════════ TAB CHART ══════════════ -->
 <div id="tab-chart" class="tab-content">
 
+  <!-- Toggle button selalu di atas -->
+  <button id="btn-chart-toggle" onclick="window._flowMode?window.showFlowView():window.showGraphView()" style="display:block;width:100%;padding:12px;margin-bottom:10px;border-radius:8px;border:1px solid #0ea5e9;background:#0f4c75;color:#e0f2fe;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:bold;cursor:pointer">📊 Graph &amp; History</button>
+
   <div id="flow-view">
     <canvas id="flowCv" style="display:block;width:100%;background:#0f172a;border-radius:12px"></canvas>
-    <button onclick="window.showGraphView()" style="display:block;width:100%;padding:12px;margin-top:10px;border-radius:8px;border:1px solid #0ea5e9;background:#0f4c75;color:#e0f2fe;font-family:Courier New,monospace;font-size:13px;font-weight:bold;cursor:pointer">📊 Graph &amp; History</button>
   </div>
 
   <div id="graph-view" style="display:none">
-    <button onclick="window.showFlowView()" style="display:block;width:100%;padding:11px;margin-bottom:12px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#94a3b8;font-family:Courier New,monospace;font-size:13px;cursor:pointer">← Back to Energy Flow</button>
   <div class="period-row">
     <button class="btn-period" onclick="loadChart(1,'1H',this)">1H</button>
     <button class="btn-period active" onclick="loadChart(24,'1D',this)">1D</button>
@@ -971,12 +972,16 @@ var cv,ctx,fd={},raf=null,pts=[],W=0,H=0;
 window.showFlowView=function(){
   document.getElementById('flow-view').style.display='block';
   document.getElementById('graph-view').style.display='none';
+  window._flowMode=false;
+  var btn=document.getElementById('btn-chart-toggle');if(btn){btn.textContent='📊 Graph & History';btn.style.background='#0f4c75';btn.style.borderColor='#0ea5e9';btn.style.color='#e0f2fe';}  
   if(window.chart){try{window.chart.options.plugins.zoom.pan.enabled=false;window.chart.update('none');}catch(e){}}
   _start();
 };
 window.showGraphView=function(){
   document.getElementById('flow-view').style.display='none';
   document.getElementById('graph-view').style.display='block';
+  window._flowMode=true;
+  var btn=document.getElementById('btn-chart-toggle');if(btn){btn.textContent='← Back to Energy Flow';btn.style.background='#1e293b';btn.style.borderColor='#334155';btn.style.color='#94a3b8';}
   _stop();
   if(window.chart){try{window.chart.options.plugins.zoom.pan.enabled=true;window.chart.update('none');}catch(e){}}
   if(!window.chart)loadChart(24,'1D',document.querySelector('.btn-period.active'));
