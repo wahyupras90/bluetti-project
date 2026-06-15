@@ -284,10 +284,10 @@ def get_weather():
         daily = d.get("daily", {})
         codes = daily.get("weathercode", [None, None])
         rad   = daily.get("shortwave_radiation_sum", [None, None])
-        def wcode_to_icon(c):
+        def wcode_to_icon(c, is_night=False):
             if c is None: return "?"
-            if c == 0:    return "☀️"
-            if c <= 2:    return "🌤️"
+            if c == 0:    return "🌙" if is_night else "☀️"
+            if c <= 2:    return "🌙" if is_night else "🌤️"
             if c <= 48:   return "⛅"
             if c <= 67:   return "🌧️"
             return "⛈️"
@@ -350,7 +350,7 @@ def get_weather():
 
         # Icon TODAY: hourly jam sekarang
         _idx_now = hourly_times.index(now_str) if now_str in hourly_times else None
-        icon_now = wcode_to_icon(hourly_wcode[_idx_now] if _idx_now is not None and _idx_now < len(hourly_wcode) else codes[0] if codes else None)
+        icon_now = wcode_to_icon(hourly_wcode[_idx_now] if _idx_now is not None and _idx_now < len(hourly_wcode) else codes[0] if codes else None, is_night=(_dt.now().hour < 6 or _dt.now().hour >= 18))
 
         # Trend irr tomorrow vs today
         if avg_irr_today and avg_irr_tomorrow:
