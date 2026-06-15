@@ -44,7 +44,7 @@ state = {
 }
 
 _last_trigger = {f"A{i}": 0.0 for i in ["1", "1b", "2", "3", "4_pagi", "4_siang", "5", "6", "7"]}
-_timers = {"A2": None, "A4_siang": None, "A7": None}
+_timers = {"A2": None, "A4": None, "A7": None}
 
 def now_sec(): return time.time()
 def ac_is_on(): return state["ac_on"] == "ON"
@@ -144,18 +144,18 @@ def check_rules():
 
     # 4. FASE SIANG: PEMUTUS (OFF)
     if is_time_range("06:30", "11:30") and soc <= 45:
-        if ac_is_on() and debounce_ok("A4_pagi"):
-            trigger("A4_pagi", "MORN OFF", [f"SOC={soc:.0f}% <= 45%"], "AC OFF", "OFF")
+        if ac_is_on() and debounce_ok("A4"):
+            trigger("A4", "MORN OFF", [f"SOC={soc:.0f}% <= 45%"], "AC OFF", "OFF")
         return
 
     if is_time_range("11:30", "15:30") and ac_is_on() and (pv is not None) and (ac_out is not None):
         a4_siang_cond = (soc <= 60) and (pv < ac_out)
-        if check_timer("A4_siang", a4_siang_cond, 900):
-            if debounce_ok("A4_siang"):
-                trigger("A4_siang", "DAY OFF", [f"SOC={soc:.0f}% <= 60%", f"PV={pv:.0f}W < LOAD={ac_out:.0f}W"], "AC OFF", "OFF")
+        if check_timer("A4", a4_siang_cond, 900):
+            if debounce_ok("A4"):
+                trigger("A4", "DAY OFF", [f"SOC={soc:.0f}% <= 60%", f"PV={pv:.0f}W < LOAD={ac_out:.0f}W"], "AC OFF", "OFF")
             return
     else:
-        check_timer("A4_siang", False, 900)
+        check_timer("A4", False, 900)
 
     # 5. FASE SIANG: RECOVERY (ON)
     if is_time_range("06:30", "15:30"):

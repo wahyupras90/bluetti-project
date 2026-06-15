@@ -905,8 +905,15 @@ function applyStatus(d) {
 
   // LAST RULE + auto status
   const ruleEl = document.getElementById('s-rule');
-  const autoStatus = d.auto_paused ? 'PAUSED' : d.auto_active ? 'AUTO ON' : 'INACTIVE';
-  ruleEl.textContent = (d.last_rule || '--') + ' · ' + autoStatus;
+  const autoStatus = d.auto_paused ? 'PAUSED' : d.auto_active ? 'ON' : 'OFF';
+  // Format: "A4 MORN OFF · 10:08 · ON"
+  const ruleRaw = d.last_rule || '--';
+  const ruleParts = ruleRaw.split(' ');
+  const ruleId   = ruleParts[0] || '';
+  const ruleName = ruleParts[1] || '';
+  const ruleTime = ruleParts[2] || '';
+  const ruleShort = ruleId && ruleName ? ruleId + ' ' + ruleName + ' · ' + ruleTime + ' · AUTO ' + autoStatus : '--';
+  ruleEl.textContent = ruleShort;
   ruleEl.className = 'status-value dim';
   window._autoPaused = d.auto_paused;
   const ab=document.getElementById('btn-auto');
