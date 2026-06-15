@@ -546,7 +546,7 @@ body{background:#0f172a;color:#e2e8f0;font-family:'JetBrains Mono',monospace;min
   border-bottom:2px solid transparent;transition:all 0.15s}
 .tab-btn.active{color:#e2e8f0;border-bottom-color:#0ea5e9}
 
-.tab-content{display:none;padding:14px}
+.tab-content{display:none;padding:14px;padding-bottom:40px}
 .tab-content.active{display:block}
 
 /* STATUS */
@@ -767,7 +767,7 @@ body{background:#0f172a;color:#e2e8f0;font-family:'JetBrains Mono',monospace;min
 
   <div id="flow-view">
     <canvas id="flowCv" style="display:block;width:100%;background:#0f172a;border-radius:12px"></canvas>
-  <div class="health-card" style="margin-top:10px">
+  <div class="health-card" style="margin-top:4px;margin-bottom:60px">
     <div class="health-title">🔋 BATTERY HEALTH</div>
     <div id="health-content">
       <div class="health-note">Loading data...</div>
@@ -1522,7 +1522,7 @@ function renderHealth(deg) {
       <span class="summary-value">${deg.last_wh.toLocaleString()} Wh</span>
     </div>
     <div class="health-row">
-      <span class="health-label">Waktu ukur</span>
+      <span class="health-label">Measured</span>
       <span class="summary-value dim">${deg.last_date}</span>
     </div>
     <div class="health-row">
