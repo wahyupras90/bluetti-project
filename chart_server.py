@@ -259,6 +259,7 @@ def get_status():
         "est_a2": calc_est_a2(),
         "weather": get_weather(),
         "absorbed_pct": absorbed_pct,
+        "degradation": load_degradation(),
         "forecast_irr": (get_weather() or {}).get("irr_next" if datetime.now().minute >= 30 else "irr_now"),
     }
 
@@ -473,32 +474,27 @@ def calc_summary(rows):
 
 
 def load_degradation():
-    """Baca bluetti_degradation.csv dan hitung ringkasan."""
-    deg_file = os.path.expanduser("~/bluetti_degradation.csv")
+    """Baca bluetti_degradation.json."""
+    deg_file = os.path.expanduser("~/bluetti_degradation.json")
     if not os.path.exists(deg_file):
         return None
     try:
-        rows = []
         with open(deg_file) as f:
-            for row in csv.DictReader(f):
-                try:
-                    rows.append({
-                        "date": row["date"],
-                        "time": row["time"],
-                        "eff_wh": float(row["eff_capacity_wh"]),
-                    })
-                except: continue
-        if not rows:
+            data = json.load(f)
+        latest  = data.get("latest", {})
+        history = data.get("history", [])
+        if not latest:
             return None
-        baseline  = rows[0]["eff_wh"]
-        last      = rows[-1]
-        deg_pct   = (1 - last["eff_wh"] / baseline) * 100 if baseline else 0
+        baseline = history[0]["cap_eff_wh"] if history else latest["cap_eff_wh"]
+        deg_pct  = round((1 - latest["cap_eff_wh"] / baseline) * 100, 1) if baseline else 0
         return {
-            "last_wh":   round(last["eff_wh"]),
-            "last_date": f"{last['date']} {last['time']}",
-            "baseline":  round(baseline),
-            "deg_pct":   round(deg_pct, 1),
-            "count":     len(rows),
+            "last_wh":   latest["cap_eff_wh"],
+            "last_date": latest["timestamp"][:16],
+            "baseline":  baseline,
+            "deg_pct":   deg_pct,
+            "health_pct": latest.get("health_pct"),
+            "avg_load_w": latest.get("avg_load_w"),
+            "count":     len(history),
         }
     except:
         return None
