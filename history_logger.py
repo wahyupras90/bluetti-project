@@ -21,7 +21,7 @@ TOPIC_GRID_V = f"bluetti/state/{DEVICE_NAME}/ac_input_voltage"
 TOPIC_AC_ON  = f"bluetti/state/{DEVICE_NAME}/ac_output_on"
 TOPIC_DC_OUT = f"bluetti/state/{DEVICE_NAME}/dc_output_power"
 
-state = {"soc": None, "pv": None, "ac_out": None, "grid_v": None, "ac_on": None}
+state = {"soc": None, "pv": None, "ac_out": None, "grid_v": None, "ac_on": None, "dc_out": 0}
 last_log_time   = 0
 last_flush_time = 0
 
