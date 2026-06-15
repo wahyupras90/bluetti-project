@@ -138,12 +138,12 @@ def on_message(client, userdata, msg):
             elif t==TOPIC_AC_OUT: state["ac_out"] = v
             elif t==TOPIC_GRID_V: state["grid_v"] = v
             elif t in (TOPIC_CHG,TOPIC_DCHG): state["chg_time"] = int(v)
-        except ValueError:
-            if t==TOPIC_AC_ON: state["ac_on"] = p.upper()
-            elif t.endswith("/dc_output_on"): state["dc_on"] = p.upper()
             elif t.endswith("/dc_output_power"):
                 try: state["dc_out"] = float(p)
                 except: pass
+        except ValueError:
+            if t==TOPIC_AC_ON: state["ac_on"] = p.upper()
+            elif t.endswith("/dc_output_on"): state["dc_on"] = p.upper()
         state["last_ts"] = __import__("time").time()
 
 def mqtt_thread():
