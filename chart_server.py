@@ -178,7 +178,7 @@ def service_info(name):
                     started = datetime.strptime(f"{parts[1]} {parts[2]}","%Y-%m-%d %H:%M:%S")
                     d = datetime.now()-started
                     h,m = int(d.total_seconds()//3600), int((d.total_seconds()%3600)//60)
-                    uptime = f"{h}j {m}m"
+                    uptime = f"{h}h {m}m"
                 except: pass
         return active, uptime
     except: return False, ""
@@ -205,7 +205,7 @@ def get_status():
     if s["chg_time"] is not None and s["pv"] is not None and s["ac_out"] is not None:
         mins = s["chg_time"]
         h, m = mins//60, mins%60
-        ts   = f"{h}j {m}m" if h>0 else f"{m}m"
+        ts   = f"{h}h {m}m" if h>0 else f"{m}m"
         diff = s["pv"] - s["ac_out"]
         if diff > TIME_BALANCE_W:
             time_rem = f"{ts} ↑"; time_rem_dir = 1
@@ -239,7 +239,7 @@ def get_status():
         "log": log_lines,
         "est_a2": calc_est_a2(),
         "weather": get_weather(),
-        "forecast_irr": (get_weather() or {}).get("irr_now"),
+        "forecast_irr": (get_weather() or {}).get("irr_next" if datetime.now().minute >= 30 else "irr_now"),
     }
 
 
@@ -858,7 +858,7 @@ function applyStatus(d) {
   // SOLAR EFF = PV actual vs forecast
   const sefEl = document.getElementById('s-solar-eff');
   if (d.forecast_irr && d.forecast_irr > 0 && d.pv !== null && d.pv > 0) {
-    const eff = Math.round((d.pv / d.forecast_irr) * 100);
+    const eff = Math.round((d.pv / (d.forecast_irr * 0.715)) * 100);
     sefEl.textContent = eff + '% of fcst';
     sefEl.className = 'status-value ' + (eff >= 70 ? 'green' : eff >= 40 ? 'yellow' : 'red');
   } else { sefEl.textContent = '--'; sefEl.className = 'status-value dim'; }
