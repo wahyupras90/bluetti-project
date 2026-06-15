@@ -1403,7 +1403,7 @@ async function loadChart(hours, label, btn) {
 function renderHealth(deg) {
   const el = document.getElementById('health-content');
   if (!deg) {
-    el.innerHTML = '<div class="health-note">No data yet — first measurement will appear after a valid discharge window is detected (AC ON + PV=0 + stable load at night).</div>';
+    el.innerHTML = '<div class="health-note">No data yet. Waiting for a clean discharge window: load > 10W, PV=0, stable consumption.</div>';
     return;
   }
   const pct  = deg.deg_pct;
