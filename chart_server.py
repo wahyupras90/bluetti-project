@@ -546,12 +546,12 @@ body{background:#0f172a;color:#e2e8f0;font-family:'JetBrains Mono',monospace;min
   font-family:'JetBrains Mono',monospace;font-weight:bold;cursor:pointer}
 
 /* CHART TAB */
-.period-row{display:flex;gap:8px;margin-bottom:12px}
+.period-row{display:flex;gap:8px;margin-bottom:6px}
 .btn-period{flex:1;padding:8px 0;border:1px solid #334155;background:#1e293b;
-  color:#94a3b8;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:13px;cursor:pointer}
+  color:#94a3b8;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:11px;padding:6px 0;cursor:pointer}
 .btn-period.active{background:#0f4c75;border-color:#0ea5e9;color:#e0f2fe;font-weight:bold}
-.filter-row{display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap}
-.filter-item{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px}
+.filter-row{display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap;justify-content:center}
+.filter-item{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px}
 .filter-box{width:14px;height:14px;border-radius:3px;border:2px solid;
   display:flex;align-items:center;justify-content:center;font-size:10px}
 .filter-box.checked::after{content:'✓';font-weight:bold}
@@ -1361,7 +1361,7 @@ function buildChart(data) {
           ticks:{color:'#3b82f6',font:{family:'Courier New',size:10},callback:v=>`${v}%`},
           grid:{color:'#1e293b'},
         },
-        yW:{type:'linear',position:'right',min:0,
+        yW:{type:'linear',position:'right',min:0,suggestedMax:100,
           ticks:{color:'#94a3b8',font:{family:'Courier New',size:10},callback:v=>`${v}W`},
           grid:{display:false},
         },
