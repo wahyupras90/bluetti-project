@@ -74,9 +74,9 @@ def validate_window(rows):
     if len(valid) < MIN_POINTS:
         return False, f"data valid kurang ({len(valid)}/{MIN_POINTS})", {}
 
-    # Syarat 1: AC ON semua
-    if not all(r["ac_on"] == "ON" for r in valid):
-        return False, "AC tidak ON seluruhnya", {}
+    # Syarat 1: ada beban (total_out > 10W)
+    if not all(r["ac_out"] > 10 for r in valid):
+        return False, "tidak ada beban cukup (total_out <= 10W)", {}
 
     # Syarat 2: PV = 0 semua (tidak ada solar)
     if any(r["pv"] > 5 for r in valid):  # toleransi 5W noise
