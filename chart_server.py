@@ -257,7 +257,7 @@ def get_weather():
         url = (f"https://api.open-meteo.com/v1/forecast"
                f"?latitude={LAT}&longitude={LON}"
                f"&daily=weathercode,shortwave_radiation_sum"
-               f"&hourly=shortwave_radiation,weathercode"
+               f"&hourly=shortwave_radiation,weathercode,temperature_2m"
                f"&timezone=Asia%2FJakarta&forecast_days=2")
         with urllib.request.urlopen(url, timeout=5) as r:
             d = json.loads(r.read())
@@ -309,9 +309,34 @@ def get_weather():
             elif t.startswith(tomorrow_str):
                 irr_tomorrow.append({"h": h, "irr": irr_val, "icon": h_icon})
 
+        # Hitung avg IRR per hari (jam 06-17)
+        hourly_temp = d.get("hourly", {}).get("temperature_2m", [])
+        def avg_irr(day_str):
+            vals = [hourly_irr[i] for i,t in enumerate(hourly_times)
+                    if t.startswith(day_str) and 6 <= int(t[11:13]) <= 17
+                    and i < len(hourly_irr)]
+            return round(sum(vals)/len(vals), 1) if vals else None
+        def max_temp(day_str):
+            vals = [hourly_temp[i] for i,t in enumerate(hourly_times)
+                    if t.startswith(day_str) and i < len(hourly_temp)]
+            return round(max(vals), 1) if vals else None
+
+        avg_irr_today    = avg_irr(today_str)
+        avg_irr_tomorrow = avg_irr(tomorrow_str)
+        temp_today       = max_temp(today_str)
+        temp_tomorrow    = max_temp(tomorrow_str)
+
+        # Trend irr tomorrow vs today
+        if avg_irr_today and avg_irr_tomorrow:
+            irr_trend = '↑' if avg_irr_tomorrow > avg_irr_today else '↓' if avg_irr_tomorrow < avg_irr_today else '→'
+        else:
+            irr_trend = ''
+
         result = {
-            "today":    {"icon": wcode_to_icon(codes[0] if codes else None),    "pv_est": rad_to_kwh(rad[0] if rad else None)},
-            "tomorrow": {"icon": wcode_to_icon(codes[1] if len(codes)>1 else None), "pv_est": rad_to_kwh(rad[1] if len(rad)>1 else None)},
+            "today":    {"icon": wcode_to_icon(codes[0] if codes else None), "pv_est": rad_to_kwh(rad[0] if rad else None),
+                         "temp": temp_today, "irr_now": irr_now},
+            "tomorrow": {"icon": wcode_to_icon(codes[1] if len(codes)>1 else None), "pv_est": rad_to_kwh(rad[1] if len(rad)>1 else None),
+                         "temp": temp_tomorrow, "avg_irr": avg_irr_tomorrow, "irr_trend": irr_trend},
             "irr_now": irr_now, "irr_next": irr_next,
             "irr_today": irr_today, "irr_tomorrow": irr_tomorrow,
         }
@@ -472,6 +497,15 @@ HTML = r"""<!DOCTYPE html>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
 <style>
+.weather-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.weather-btn{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:12px 10px;cursor:pointer;transition:all 0.15s}
+.weather-main{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.weather-icon-big{font-size:34px;flex-shrink:0}
+.weather-info{flex:1}
+.weather-temp-row{font-size:16px;font-weight:700;color:#e2e8f0;line-height:1.2}
+.weather-irr-row{font-size:11px;color:#eab308;margin-top:2px}
+.weather-div{height:1px;background:#334155;margin-bottom:6px}
+.weather-kwh{font-size:12px;font-weight:700;color:#eab308;text-align:center}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#0f172a;color:#e2e8f0;font-family:'JetBrains Mono',monospace;min-height:100vh}
 
@@ -597,15 +631,29 @@ body{background:#0f172a;color:#e2e8f0;font-family:'JetBrains Mono',monospace;min
   <!-- WEATHER -->
   <div id="weather-card" style="display:none;margin-bottom:10px">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <div style="background:#1e293b;border:1px solid #334155;border-radius:10px;padding:12px;text-align:center;cursor:pointer" onclick="showForecast('today')">
-        <div style="font-size:22px;margin-bottom:4px" id="w-today-icon">--</div>
-        <div style="font-size:10px;color:#64748b;font-weight:700;letter-spacing:1px;margin-bottom:4px">TODAY</div>
-        <div style="font-size:13px;font-weight:700;color:#eab308" id="w-today">--</div>
+      <div class="weather-btn" onclick="showForecast('today')">
+        <div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:1.5px;margin-bottom:6px;text-align:center">TODAY</div>
+        <div class="weather-main">
+          <div class="weather-icon-big" id="w-today-icon">--</div>
+          <div class="weather-info">
+            <div class="weather-temp-row" id="w-today-temp">--°C</div>
+            <div class="weather-irr-row" id="w-today-irr">⚡ --</div>
+          </div>
+        </div>
+        <div class="weather-div"></div>
+        <div class="weather-kwh" id="w-today">--</div>
       </div>
-      <div style="background:#1e293b;border:1px solid #334155;border-radius:10px;padding:12px;text-align:center;cursor:pointer" onclick="showForecast('tomorrow')">
-        <div style="font-size:22px;margin-bottom:4px" id="w-tmr-icon">--</div>
-        <div style="font-size:10px;color:#64748b;font-weight:700;letter-spacing:1px;margin-bottom:4px">TOMORROW</div>
-        <div style="font-size:13px;font-weight:700;color:#eab308" id="w-tomorrow">--</div>
+      <div class="weather-btn" onclick="showForecast('tomorrow')">
+        <div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:1.5px;margin-bottom:6px;text-align:center">TOMORROW</div>
+        <div class="weather-main">
+          <div class="weather-icon-big" id="w-tmr-icon">--</div>
+          <div class="weather-info">
+            <div class="weather-temp-row" id="w-tmr-temp">--°C</div>
+            <div class="weather-irr-row" id="w-tmr-irr">⚡ --</div>
+          </div>
+        </div>
+        <div class="weather-div"></div>
+        <div class="weather-kwh" id="w-tomorrow">--</div>
       </div>
     </div>
   </div>
@@ -930,8 +978,13 @@ function applyStatus(d) {
     wCard.style.display = '';
     const w = d.weather;
     document.getElementById('w-today-icon').textContent = w.today.icon || '--';
+    document.getElementById('w-today-temp').textContent = w.today.temp !== null ? w.today.temp+'°C' : '--°C';
+    document.getElementById('w-today-irr').textContent = w.today.irr_now !== null ? '⚡ '+w.today.irr_now+' W/m²' : '⚡ --';
     document.getElementById('w-today').textContent = w.today.pv_est !== null ? 'est. ~'+w.today.pv_est+' kWh' : '--';
     document.getElementById('w-tmr-icon').textContent = w.tomorrow.icon || '--';
+    document.getElementById('w-tmr-temp').textContent = w.tomorrow.temp !== null ? w.tomorrow.temp+'°C' : '--°C';
+    const tIrr = w.tomorrow.avg_irr; const tTrend = w.tomorrow.irr_trend || '';
+    document.getElementById('w-tmr-irr').textContent = tIrr !== null ? '⚡ '+tIrr+' W/m² '+tTrend : '⚡ --';
     document.getElementById('w-tomorrow').textContent = w.tomorrow.pv_est !== null ? 'est. ~'+w.tomorrow.pv_est+' kWh' : '--';
     window._weatherData = w;
   } else {
