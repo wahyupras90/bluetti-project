@@ -19,6 +19,7 @@ TOPIC_PV     = f"bluetti/state/{DEVICE_NAME}/dc_input_power"
 TOPIC_AC_OUT = f"bluetti/state/{DEVICE_NAME}/ac_output_power"
 TOPIC_GRID_V = f"bluetti/state/{DEVICE_NAME}/ac_input_voltage"
 TOPIC_AC_ON  = f"bluetti/state/{DEVICE_NAME}/ac_output_on"
+TOPIC_DC_OUT = f"bluetti/state/{DEVICE_NAME}/dc_output_power"
 
 state = {"soc": None, "pv": None, "ac_out": None, "grid_v": None, "ac_on": None}
 last_log_time   = 0
@@ -27,7 +28,7 @@ last_flush_time = 0
 def ensure_header(path):
     if not os.path.exists(path):
         with open(path, "w", newline="") as f:
-            csv.writer(f).writerow(["timestamp","soc","pv","ac_out","grid_v","ac_on"])
+            csv.writer(f).writerow(["timestamp","soc","pv","ac_out","grid_v","ac_on","dc_out","total_out"])
 
 def write_row(path, row):
     with open(path, "a", newline="") as f:
@@ -51,7 +52,7 @@ def flush_to_disk():
     ensure_header(CSV_RAM)
     # Hapus isi lama lalu tulis ulang header
     with open(CSV_RAM, "w", newline="") as f:
-        csv.writer(f).writerow(["timestamp","soc","pv","ac_out","grid_v","ac_on"])
+        csv.writer(f).writerow(["timestamp","soc","pv","ac_out","grid_v","ac_on","dc_out","total_out"])
     print(f"[FLUSH] {len(data_rows)} baris → {CSV_DISK}")
 
 def log_history():
@@ -65,6 +66,8 @@ def log_history():
         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         state["soc"], state["pv"], state["ac_out"],
         state["grid_v"], state["ac_on"],
+        state.get("dc_out", 0),
+        (state.get("ac_out") or 0) + state.get("dc_out", 0),
     ]
     write_row(CSV_RAM, row)
     print(f"[LOG] SOC={state['soc']}% PV={state['pv']}W LOAD={state['ac_out']}W")
@@ -76,7 +79,7 @@ def log_history():
 
 def on_connect(client, userdata, flags, rc):
     print("MQTT connected")
-    client.subscribe([(TOPIC_SOC,0),(TOPIC_PV,0),(TOPIC_AC_OUT,0),(TOPIC_GRID_V,0),(TOPIC_AC_ON,0)])
+    client.subscribe([(TOPIC_SOC,0),(TOPIC_PV,0),(TOPIC_AC_OUT,0),(TOPIC_GRID_V,0),(TOPIC_AC_ON,0),(TOPIC_DC_OUT,0)])
 
 def on_message(client, userdata, msg):
     topic   = msg.topic
@@ -84,6 +87,7 @@ def on_message(client, userdata, msg):
     try:
         val = float(payload)
         if   topic == TOPIC_SOC:    state["soc"]    = val
+        elif topic == TOPIC_DC_OUT: state["dc_out"] = val
         elif topic == TOPIC_PV:     state["pv"]     = val
         elif topic == TOPIC_AC_OUT: state["ac_out"] = val
         elif topic == TOPIC_GRID_V: state["grid_v"] = val

@@ -452,7 +452,7 @@ def get_chart(hours, label):
         "labels": [r["ts"] for r in rows],
         "soc":    [r["soc"] for r in rows],
         "pv":     [r["pv"]  for r in rows],
-        "ac_out": [r["ac_out"] for r in rows],
+        "ac_out": [float(r.get("total_out") or 0) if r.get("total_out") else (float(r.get("ac_out") or 0) + float(r.get("dc_out") or 0)) for r in rows],
         "rules":  rules, "summary": s,
         "period": label, "count": len(rows),
         "degradation": load_degradation(),
@@ -709,7 +709,7 @@ body{background:#0f172a;color:#e2e8f0;font-family:'JetBrains Mono',monospace;min
     </label>
     <label class="filter-item" onclick="toggleFilter('acout')">
       <div class="filter-box checked" id="box-acout" style="border-color:#ef4444;color:#ef4444;background:#2d0000"></div>
-      <span style="color:#ef4444">AC OUT W</span>
+      <span style="color:#ef4444">TOTAL OUT W</span>
     </label>
   </div>
 
@@ -1309,7 +1309,7 @@ function buildChart(data) {
          borderWidth:2,pointRadius:0,tension:0.3,yAxisID:'yPct',hidden:!filterState.soc},
         {label:'PV',data:data.pv,borderColor:'#eab308',backgroundColor:'rgba(234,179,8,0.04)',
          borderWidth:2,pointRadius:0,tension:0.3,yAxisID:'yW',hidden:!filterState.pv},
-        {label:'AC OUT',data:data.ac_out,borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,0.04)',
+        {label:'TOTAL OUT',data:data.ac_out,borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,0.04)',
          borderWidth:2,pointRadius:0,tension:0.3,yAxisID:'yW',hidden:!filterState.acout},
       ]
     },
@@ -1330,7 +1330,7 @@ function buildChart(data) {
               const v=i.raw;
               if(i.dataset.label==='SOC')    return ` SOC    : ${v??'--'}%`;
               if(i.dataset.label==='PV')     return ` PV     : ${v??'--'}W`;
-              if(i.dataset.label==='AC OUT') return ` AC OUT : ${v??'--'}W`;
+              if(i.dataset.label==='TOTAL OUT') return ` TOTAL  : ${v??'--'}W`;
               return '';
             },
             afterBody:i=>{
