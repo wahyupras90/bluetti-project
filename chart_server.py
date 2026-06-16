@@ -804,7 +804,15 @@ body{background:#0f172a;color:#e2e8f0;font-family:'JetBrains Mono',monospace;min
 
   <div class="chart-wrap">
     <div class="zoom-hint">pinch = zoom · drag = geser</div>
-    <canvas id="mainChart" height="260"></canvas>
+    <div id="chart-wrap" style="position:relative"><canvas id="mainChart" height="260"></canvas>
+    <div id="custom-tooltip" style="display:none;position:absolute;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:10px;pointer-events:none;z-index:100;min-width:160px">
+      <div id="ct-title" style="font-size:11px;color:#94a3b8;margin-bottom:6px;font-family:'JetBrains Mono',monospace"></div>
+      <div id="ct-body" style="font-size:12px;color:#e2e8f0;font-family:'JetBrains Mono',monospace;line-height:1.8"></div>
+    </div></div>
+    <div id="custom-tooltip" style="display:none;position:absolute;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:10px;pointer-events:none;z-index:100;min-width:160px">
+      <div id="ct-title" style="font-size:11px;color:#94a3b8;margin-bottom:6px;font-family:'JetBrains Mono',monospace"></div>
+      <div id="ct-body" style="font-size:12px;color:#e2e8f0;font-family:'JetBrains Mono',monospace;line-height:1.8"></div>
+    </div>
   </div>
 
   <div class="summary">
@@ -1424,11 +1432,12 @@ function buildChart(data) {
     },
     options:{
       responsive:true,animation:false,
-      events:['mousemove','mouseout'],
+      events:[],
       interaction:{mode:'index',intersect:false,axis:'x'},
       plugins:{
         legend:{display:false},
         tooltip:{
+          enabled:false,
           position:'fixedTop',
           backgroundColor:'#1e293b',borderColor:'#334155',borderWidth:1,
           titleColor:'#94a3b8',bodyColor:'#e2e8f0',padding:10,
@@ -1483,11 +1492,33 @@ function buildChart(data) {
     const x = clientX - rect.left;
     const idx = Math.round(chart.scales.x.getValueForPixel(x));
     if(idx>=0 && idx<chart.data.labels.length){
-      chart.tooltip.setActiveElements(
-        chart.data.datasets.map((_,i)=>({datasetIndex:i,index:idx})),{x,y:clientY-rect.top}
-      );
-      chart.update('none');
+      const tt = document.getElementById('custom-tooltip');
+      const title = chart.data.labels[idx];
+      let body = '';
+      chart.data.datasets.forEach(ds=>{
+        if(ds.hidden) return;
+        const v = ds.data[idx];
+        if(ds.label==='SOC') body += `<div style="color:#3b82f6">SOC&nbsp;&nbsp;&nbsp;: ${v??'--'}%</div>`;
+        if(ds.label==='PV') body += `<div style="color:#eab308">PV&nbsp;&nbsp;&nbsp;&nbsp;: ${v??'--'}W</div>`;
+        if(ds.label==='TOTAL OUT') body += `<div style="color:#ef4444">TOTAL&nbsp;: ${v??'--'}W</div>`;
+      });
+      // Rule
+      const rule = getActiveRule(title);
+      if(rule) body += `<div style="color:#94a3b8;margin-top:4px">■ ${rule.label}</div>`;
+      document.getElementById('ct-title').textContent = title;
+      document.getElementById('ct-body').innerHTML = body;
+      // Posisi tooltip
+      let tx = x + 10;
+      if(tx + 170 > rect.width) tx = x - 180;
+      tt.style.left = tx + 'px';
+      tt.style.top = '10px';
+      tt.style.display = 'block';
     }
+  }
+
+  function hideTooltip() {
+    const tt = document.getElementById('custom-tooltip');
+    if(tt) tt.style.display = 'none';
   }
 
   cv.addEventListener('touchstart', e=>{
@@ -1520,7 +1551,7 @@ function buildChart(data) {
     clearTimeout(longPressTimer);
     if(tooltipMode){
       // Sembunyikan tooltip, re-enable pan
-      chart.tooltip.setActiveElements([],{x:0,y:0});
+      hideTooltip();
       chart.options.plugins.zoom.pan.enabled=true;
       chart.update('none');
       tooltipMode=false;
