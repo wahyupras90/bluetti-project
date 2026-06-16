@@ -43,7 +43,7 @@ state = {
     "soc": None, "pv": None, "ac_out": None, "grid_v": None, "ac_on": None,
 }
 
-_last_trigger = {f"A{i}": 0.0 for i in ["1", "1b", "2", "3", "4", "5", "6", "7"]}
+_last_trigger = {f"A{i}": 0.0 for i in ["1", "1b", "2", "3", "4", "4p", "4s", "5", "6", "7"]}
 _a6_triggered = False
 _timers = {"A2": None, "A4": None, "A7": None}
 
@@ -100,6 +100,7 @@ def trigger(rule_id, name, details, action, val):
 # EVALUASI RULE
 # ================================================================
 def check_rules():
+    global _a6_triggered
     if is_paused(): return
     if datetime.now().year < 2026:
         log.warning("JAM TIDAK VALID — belum sync NTP, otomasi dibekukan")
@@ -118,12 +119,14 @@ def check_rules():
     # 2. FASE MALAM / OUTAGE
     if grid is not None and grid < 150 and is_malam and soc >= 41:
         if ac_is_off() and debounce_ok("A6"):
-            _a6_triggered = True; trigger("A6", "GRID DOWN", [f"GRID={grid:.0f}V", f"SOC={soc:.0f}%"], "AC ON", "ON")
+            _a6_triggered = True
+            trigger("A6", "GRID DOWN", [f"GRID={grid:.0f}V", f"SOC={soc:.0f}%"], "AC ON", "ON")
         return
 
     if check_timer("A7", grid is not None and grid >= 200 and is_malam and ac_is_on() and _a6_triggered, 30):
         if debounce_ok("A7"):
-            _a6_triggered = False; trigger("A7", "GRID UP", [f"GRID={grid:.0f}V stabil 30s"], "AC OFF", "OFF")
+            _a6_triggered = False
+            trigger("A7", "GRID UP", [f"GRID={grid:.0f}V stabil 30s"], "AC OFF", "OFF")
         return
 
     if is_malam and soc < 81:
@@ -145,15 +148,15 @@ def check_rules():
 
     # 4. FASE SIANG: PEMUTUS (OFF)
     if is_time_range("06:30", "11:30") and soc <= 45:
-        if ac_is_on() and debounce_ok("A4"):
-            trigger("A4", "MORN OFF", [f"SOC={soc:.0f}% <= 45%"], "AC OFF", "OFF")
+        if ac_is_on() and debounce_ok("A4p"):
+            trigger("A4p", "MORN OFF", [f"SOC={soc:.0f}% <= 45%"], "AC OFF", "OFF")
         return
 
     if is_time_range("11:30", "15:30") and ac_is_on() and (pv is not None) and (ac_out is not None):
         a4_siang_cond = (soc <= 60) and (pv < ac_out)
         if check_timer("A4", a4_siang_cond, 900):
-            if debounce_ok("A4"):
-                trigger("A4", "DAY OFF", [f"SOC={soc:.0f}% <= 60%", f"PV={pv:.0f}W < LOAD={ac_out:.0f}W"], "AC OFF", "OFF")
+            if debounce_ok("A4s"):
+                trigger("A4s", "DAY OFF", [f"SOC={soc:.0f}% <= 60%", f"PV={pv:.0f}W < LOAD={ac_out:.0f}W"], "AC OFF", "OFF")
             return
     else:
         check_timer("A4", False, 900)
