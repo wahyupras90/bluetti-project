@@ -344,9 +344,13 @@ def get_weather():
                     if t.startswith(day_str) and i < len(hourly_temp)]
             return round(max(vals), 1) if vals else None
 
+        def temp_now():
+            idx = hourly_times.index(now_str) if now_str in hourly_times else None
+            return round(hourly_temp[idx], 1) if idx is not None and idx < len(hourly_temp) else None
+
         avg_irr_today    = avg_irr(today_str)
         avg_irr_tomorrow = avg_irr(tomorrow_str)
-        temp_today       = max_temp(today_str)
+        temp_today       = temp_now()
         temp_tomorrow    = max_temp(tomorrow_str)
 
         # Icon TODAY: hourly jam sekarang
@@ -369,7 +373,7 @@ def get_weather():
 
         result = {
             "today":    {"icon": icon_now, "pv_est": rad_to_kwh(rad[0] if rad else None),
-                         "temp": temp_today, "irr_now": irr_now, "rem_kwh": rem_kwh},
+                         "temp": temp_today, "irr_now": irr_next if datetime.now().minute >= 30 else irr_now, "rem_kwh": rem_kwh},
             "tomorrow": {"icon": wcode_to_icon(codes[1] if len(codes)>1 else None), "pv_est": rad_to_kwh(rad[1] if len(rad)>1 else None),
                          "temp": temp_tomorrow, "avg_irr": avg_irr_tomorrow, "irr_trend": irr_trend},
             "irr_now": irr_now, "irr_next": irr_next,
