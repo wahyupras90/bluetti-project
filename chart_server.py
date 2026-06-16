@@ -260,7 +260,7 @@ def get_status():
         "weather": get_weather(),
         "absorbed_pct": absorbed_pct,
         "degradation": load_degradation(),
-        "forecast_irr": (get_weather() or {}).get("irr_next" if datetime.now().minute >= 30 else "irr_now"),
+        "forecast_irr": (lambda w: round((w.get("irr_now",0) + w.get("irr_next",0)) / 2, 1) if datetime.now().minute >= 30 and w else w.get("irr_now") if w else None)(get_weather() or {}),
     }
 
 
@@ -373,7 +373,7 @@ def get_weather():
 
         result = {
             "today":    {"icon": icon_now, "pv_est": rad_to_kwh(rad[0] if rad else None),
-                         "temp": temp_today, "irr_now": irr_next if datetime.now().minute >= 30 else irr_now, "rem_kwh": rem_kwh},
+                         "temp": temp_today, "irr_now": round((irr_now + irr_next) / 2, 1) if (datetime.now().minute >= 30 and irr_now is not None and irr_next is not None) else irr_now, "rem_kwh": rem_kwh},
             "tomorrow": {"icon": wcode_to_icon(codes[1] if len(codes)>1 else None), "pv_est": rad_to_kwh(rad[1] if len(rad)>1 else None),
                          "temp": temp_tomorrow, "avg_irr": avg_irr_tomorrow, "irr_trend": irr_trend},
             "irr_now": irr_now, "irr_next": irr_next,
