@@ -260,7 +260,7 @@ def get_status():
         "weather": get_weather(),
         "absorbed_pct": absorbed_pct,
         "degradation": load_degradation(),
-        "forecast_irr": (lambda w: round((w.get("irr_now",0) + w.get("irr_next",0)) / 2, 1) if datetime.now().minute >= 30 and w else w.get("irr_now") if w else None)(get_weather() or {}),
+        "forecast_irr": (get_weather() or {}).get("today", {}).get("irr_now"),
     }
 
 
