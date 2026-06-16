@@ -1377,6 +1377,24 @@ const fColors = {
   acout: {border:'#ef4444',bg:'#2d0000'},
 };
 
+const cursorPlugin = {
+  id: 'cursorLine',
+  afterDraw(chart) {
+    if(chart._cursorX === undefined) return;
+    const ctx = chart.ctx;
+    const yAxis = chart.scales.yPct;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(chart._cursorX, yAxis.top);
+    ctx.lineTo(chart._cursorX, yAxis.bottom);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.setLineDash([4,4]);
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+
 const ruleBandPlugin = {
   id:'ruleBands',
   beforeDraw(chart) {
@@ -1483,7 +1501,7 @@ function buildChart(data) {
         },
       },
     },
-    plugins:[ruleBandPlugin],
+    plugins:[ruleBandPlugin, cursorPlugin],
   });
 
   // Touch: tap = tooltip
@@ -1497,6 +1515,9 @@ function buildChart(data) {
     const x = clientX - rect.left;
     const idx = Math.round(chart.scales.x.getValueForPixel(x));
     if(idx>=0 && idx<chart.data.labels.length){
+      // Update cursor line
+      chart._cursorX = chart.scales.x.getPixelForValue(idx);
+      chart.draw();
       const tt = document.getElementById('custom-tooltip');
       const title = chart.data.labels[idx];
       let body = '';
@@ -1524,6 +1545,7 @@ function buildChart(data) {
   function hideTooltip() {
     const tt = document.getElementById('custom-tooltip');
     if(tt) tt.style.display = 'none';
+    if(chart) { chart._cursorX = undefined; chart.draw(); }
   }
 
   cv.addEventListener('touchstart', e=>{
