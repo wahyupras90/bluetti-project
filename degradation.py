@@ -18,8 +18,9 @@ import os, csv
 from datetime import datetime, timedelta
 
 CSV_FILE   = os.path.expanduser("~/bluetti_history.csv")
+CSV_RAM    = "/tmp/bluetti_history.csv"
 DEG_FILE   = os.path.expanduser("~/bluetti_degradation.csv")
-WINDOW_MIN = 30
+WINDOW_MIN = 1440
 MIN_POINTS = 25
 LOAD_VAR   = 0.10   # variasi beban < 10%
 BLUETTI_NOMINAL = 2048  # Wh kapasitas nominal Elite 200 V2
@@ -34,95 +35,77 @@ def ensure_header():
             ])
 
 def load_window():
-    """Baca 30 menit terakhir dari history CSV."""
-    if not os.path.exists(CSV_FILE):
-        return []
+    """Baca 24 jam terakhir dari history CSV (RAM + disk)."""
     cutoff = datetime.now() - timedelta(minutes=WINDOW_MIN)
     rows = []
-    try:
-        with open(CSV_FILE) as f:
-            for row in csv.DictReader(f):
-                try:
-                    ts = datetime.strptime(row["timestamp"], "%Y-%m-%d %H:%M:%S")
-                    if ts < cutoff:
-                        continue
-                    soc    = float(row["soc"])    if row.get("soc")    else None
-                    pv     = float(row["pv"])     if row.get("pv")     else None
-                    ac_out = float(row.get("total_out") or row.get("ac_out") or 0)
-                    ac_on  = row.get("ac_on","").upper()
-                    rows.append({
-                        "ts": ts, "soc": soc, "pv": pv,
-                        "ac_out": ac_out, "ac_on": ac_on,
-                    })
-                except: continue
-    except: pass
+    seen = set()
+    for path in [CSV_FILE, CSV_RAM]:
+        if not os.path.exists(path): continue
+        try:
+            with open(path) as f:
+                for row in csv.DictReader(f):
+                    try:
+                        ts = datetime.strptime(row["timestamp"], "%Y-%m-%d %H:%M:%S")
+                        if ts < cutoff: continue
+                        if row["timestamp"] in seen: continue
+                        seen.add(row["timestamp"])
+                        soc    = float(row["soc"]) if row.get("soc") else None
+                        pv     = float(row["pv"]) if row.get("pv") else None
+                        ac_out = float(row.get("total_out") or row.get("ac_out") or 0)
+                        ac_on  = row.get("ac_on","").upper()
+                        rows.append({"ts": ts, "soc": soc, "pv": pv, "ac_out": ac_out, "ac_on": ac_on})
+                    except: continue
+        except: pass
+    rows.sort(key=lambda r: r["ts"])
     return rows
 
 def validate_window(rows):
-    """
-    Validasi window discharge bersih.
-    Return (valid, reason, stats) 
-    """
-    if len(rows) < MIN_POINTS:
-        return False, f"data kurang ({len(rows)}/{MIN_POINTS})", {}
+    """Cari segmen discharge terbaik dari data 24 jam."""
+    if not rows:
+        return False, "tidak ada data", {}
 
-    # Filter baris valid (semua field tersedia)
-    valid = [r for r in rows if all(
-        r[k] is not None for k in ["soc","pv","ac_out","ac_on"]
-    )]
+    candidates = [r for r in rows
+                  if r["pv"] is not None and r["pv"] < 5
+                  and r["ac_out"] > 10
+                  and r["soc"] is not None]
 
-    if len(valid) < MIN_POINTS:
-        return False, f"data valid kurang ({len(valid)}/{MIN_POINTS})", {}
+    if len(candidates) < MIN_POINTS:
+        return False, f"data valid kurang ({len(candidates)}/{MIN_POINTS})", {}
 
-    # Syarat 1: ada beban (total_out > 10W)
-    if not all(r["ac_out"] > 10 for r in valid):
-        return False, "tidak ada beban cukup (total_out <= 10W)", {}
+    # Cari segmen berurutan (max gap 3 menit)
+    segments = []
+    seg = [candidates[0]]
+    for i in range(1, len(candidates)):
+        gap = (candidates[i]["ts"] - candidates[i-1]["ts"]).seconds
+        if gap <= 180:
+            seg.append(candidates[i])
+        else:
+            if len(seg) >= MIN_POINTS: segments.append(seg)
+            seg = [candidates[i]]
+    if len(seg) >= MIN_POINTS: segments.append(seg)
 
-    # Syarat 2: PV = 0 semua (tidak ada solar)
-    if any(r["pv"] > 5 for r in valid):  # toleransi 5W noise
-        return False, "ada solar input (PV > 5W)", {}
+    if not segments:
+        return False, f"tidak ada segmen berurutan >= {MIN_POINTS} titik", {}
 
-    # Syarat 3: SOC turun
-    soc_start = valid[0]["soc"]
-    soc_end   = valid[-1]["soc"]
-    if soc_end >= soc_start:
-        return False, "SOC tidak turun (charging atau flat)", {}
-
+    best = max(segments, key=lambda s: s[0]["soc"] - s[-1]["soc"])
+    soc_start = best[0]["soc"]
+    soc_end   = best[-1]["soc"]
     delta_soc = soc_start - soc_end
+
     if delta_soc < 1.0:
         return False, f"delta SOC terlalu kecil ({delta_soc:.1f}%)", {}
 
-    # Syarat 4: Beban konsisten < 10% variasi
-    loads = [r["ac_out"] for r in valid if r["ac_out"] > 0]
-    if not loads:
-        return False, "tidak ada data beban", {}
-
+    duration_h = (best[-1]["ts"] - best[0]["ts"]).seconds / 3600
+    loads = [r["ac_out"] for r in best]
     avg_load = sum(loads) / len(loads)
-    if avg_load < 10:
-        return False, f"beban terlalu kecil ({avg_load:.0f}W)", {}
-
-    max_dev = max(abs(l - avg_load) / avg_load for l in loads)
-    if max_dev > LOAD_VAR:
-        return False, f"variasi beban terlalu besar ({max_dev*100:.0f}%)", {}
-
-    # Hitung kapasitas efektif
-    duration_h = (valid[-1]["ts"] - valid[0]["ts"]).total_seconds() / 3600
-    if duration_h < 0.1:
-        return False, "durasi terlalu pendek", {}
-
-    eff_capacity = avg_load * duration_h / (delta_soc / 100)
-
-    # Sanity check: kapasitas harus masuk akal (500-3000 Wh)
-    if not (500 <= eff_capacity <= 3000):
-        return False, f"kapasitas tidak masuk akal ({eff_capacity:.0f}Wh)", {}
-
+    eff_capacity = round(avg_load * duration_h / (delta_soc / 100))
     return True, "OK", {
-        "eff_capacity": round(eff_capacity),
-        "avg_load":     round(avg_load),
-        "soc_start":    round(soc_start, 1),
-        "soc_end":      round(soc_end, 1),
+        "eff_capacity": eff_capacity,
+        "avg_load": round(avg_load, 1),
+        "soc_start": soc_start, "soc_end": soc_end,
+        "delta_soc": delta_soc,
         "duration_min": round(duration_h * 60),
-        "valid_points": len(valid),
+        "valid_points": len(best),
     }
 
 def already_logged_today():
