@@ -126,10 +126,10 @@ def check_rules():
             _a6_triggered = False; trigger("A7", "GRID UP", [f"GRID={grid:.0f}V stabil 30s"], "AC OFF", "OFF")
         return
 
-    if is_malam and soc < 61:
+    if is_malam and soc < 81:
         grid_aman = (grid is None or grid >= 200)
         if ac_is_on() and debounce_ok("A5") and grid_aman:
-            trigger("A5", "NIGHT OFF", [f"SOC={soc:.0f}% < 61%"], "AC OFF", "OFF")
+            trigger("A5", "NIGHT OFF", [f"SOC={soc:.0f}% < 81%"], "AC OFF", "OFF")
         return
 
     # 3. KICKSTART PAGI
