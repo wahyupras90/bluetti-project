@@ -1424,8 +1424,8 @@ function buildChart(data) {
     },
     options:{
       responsive:true,animation:false,
-      events:['mousemove','mouseout','click','touchstart','touchmove','touchend'],
-      interaction:{mode:'index',intersect:false},
+      events:['mousemove','mouseout'],
+      interaction:{mode:'index',intersect:false,axis:'x'},
       plugins:{
         legend:{display:false},
         tooltip:{
@@ -1450,7 +1450,8 @@ function buildChart(data) {
         },
         zoom:{
           pan:{enabled:true,mode:'x',threshold:15},
-          zoom:{wheel:{enabled:true},pinch:{enabled:true},mode:'x'},
+          limits:{x:{minRange:10}},
+          zoom:{wheel:{enabled:true,speed:0.1},pinch:{enabled:true,speed:0.05},mode:'x'},
         },
       },
       scales:{
@@ -1472,21 +1473,57 @@ function buildChart(data) {
   });
 
   // Touch: tap = tooltip
-  let txs=0,tys=0,panning=false;
+  // Touch handler: long press 500ms = tooltip, movement = drag
+  let txs=0,tys=0,tooltipMode=false,longPressTimer=null;
   const cv = document.getElementById('mainChart');
-  cv.addEventListener('touchstart',e=>{txs=e.touches[0].clientX;tys=e.touches[0].clientY;panning=false},{passive:true});
-  cv.addEventListener('touchmove', e=>{if(Math.abs(e.touches[0].clientX-txs)>10||Math.abs(e.touches[0].clientY-tys)>10)panning=true},{passive:true});
-  cv.addEventListener('touchend',  e=>{
-    if(!panning&&chart){
-      const t=e.changedTouches[0],rect=cv.getBoundingClientRect();
-      const x=t.clientX-rect.left;
-      const idx=Math.round(chart.scales.x.getValueForPixel(x));
-      if(idx>=0&&idx<chart.data.labels.length){
-        chart.tooltip.setActiveElements(
-          chart.data.datasets.map((_,i)=>({datasetIndex:i,index:idx})),{x,y:t.clientY-rect.top}
-        );
-        chart.update();
-      }
+
+  function showTooltipAt(clientX, clientY) {
+    if(!chart) return;
+    const rect = cv.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const idx = Math.round(chart.scales.x.getValueForPixel(x));
+    if(idx>=0 && idx<chart.data.labels.length){
+      chart.tooltip.setActiveElements(
+        chart.data.datasets.map((_,i)=>({datasetIndex:i,index:idx})),{x,y:clientY-rect.top}
+      );
+      chart.update('none');
+    }
+  }
+
+  cv.addEventListener('touchstart', e=>{
+    txs=e.touches[0].clientX;
+    tys=e.touches[0].clientY;
+    tooltipMode=false;
+    clearTimeout(longPressTimer);
+    longPressTimer = setTimeout(()=>{
+      tooltipMode=true;
+      // Disable pan saat tooltip mode
+      if(chart) { chart.options.plugins.zoom.pan.enabled=false; chart.update('none'); }
+      showTooltipAt(txs, tys);
+    }, 500);
+  },{passive:true});
+
+  cv.addEventListener('touchmove', e=>{
+    const dx=Math.abs(e.touches[0].clientX-txs);
+    const dy=Math.abs(e.touches[0].clientY-tys);
+    if(tooltipMode){
+      // Tooltip mode: ikuti jari
+      e.preventDefault();
+      showTooltipAt(e.touches[0].clientX, e.touches[0].clientY);
+    } else if(dx>8||dy>8){
+      // Movement sebelum 500ms: cancel long press, biarkan drag
+      clearTimeout(longPressTimer);
+    }
+  },{passive:false});
+
+  cv.addEventListener('touchend', e=>{
+    clearTimeout(longPressTimer);
+    if(tooltipMode){
+      // Sembunyikan tooltip, re-enable pan
+      chart.tooltip.setActiveElements([],{x:0,y:0});
+      chart.options.plugins.zoom.pan.enabled=true;
+      chart.update('none');
+      tooltipMode=false;
     }
   },{passive:true});
 }
