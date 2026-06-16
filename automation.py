@@ -43,7 +43,7 @@ state = {
     "soc": None, "pv": None, "ac_out": None, "grid_v": None, "ac_on": None,
 }
 
-_last_trigger = {f"A{i}": 0.0 for i in ["1", "1b", "2", "3", "4_pagi", "4_siang", "5", "6", "7"]}
+_last_trigger = {f"A{i}": 0.0 for i in ["1", "1b", "2", "3", "4", "5", "6", "7"]}
 _timers = {"A2": None, "A4": None, "A7": None}
 
 def now_sec(): return time.time()
@@ -69,7 +69,7 @@ def check_timer(rule, condition, duration_sec):
     return False
 
 def write_log(rule_id, rule_name, detail_lines, action):
-    ts = datetime.now().strftime("%H:%M:%S")
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     header = f"[{ts}] {rule_id} {rule_name}"
     log.info(header)
     for line in detail_lines: log.info(f"  {line}")
@@ -115,12 +115,12 @@ def check_rules():
         return
 
     # 2. FASE MALAM / OUTAGE
-    if grid is not None and grid < 200 and is_malam and soc >= 41:
+    if grid is not None and grid < 150 and is_malam and soc >= 41:
         if ac_is_off() and debounce_ok("A6"):
             trigger("A6", "GRID DOWN", [f"GRID={grid:.0f}V", f"SOC={soc:.0f}%"], "AC ON", "ON")
         return
 
-    if check_timer("A7", grid is not None and grid >= 215 and is_malam and ac_is_on(), 30):
+    if check_timer("A7", grid is not None and grid >= 200 and is_malam and ac_is_on(), 30):
         if debounce_ok("A7"):
             trigger("A7", "GRID UP", [f"GRID={grid:.0f}V stabil 30s"], "AC OFF", "OFF")
         return

@@ -451,7 +451,7 @@ def load_rules(hours):
     if not os.path.exists(LOG_FILE): return []
     cutoff = datetime.now() - timedelta(hours=hours)
     events = []; today = datetime.now().strftime("%Y-%m-%d")
-    pat = re.compile(r'^\[(\d{2}:\d{2}:\d{2})\]\s+(A\d+)\s+(.+)$')
+    pat = re.compile(r'^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}|\d{2}:\d{2}:\d{2})\]\s+(A\d+)\s+(.+)$')
     try:
         with open(LOG_FILE) as f:
             for line in f:
@@ -459,7 +459,12 @@ def load_rules(hours):
                 if not m: continue
                 ts_str, rule_id, _ = m.groups()
                 try:
-                    ts = datetime.strptime(f"{today} {ts_str}","%Y-%m-%d %H:%M:%S")
+                    # Support format lama (HH:MM:SS) dan baru (YYYY-MM-DD HH:MM:SS)
+                    if len(ts_str) == 8:
+                        ts = datetime.strptime(f"{today} {ts_str}", "%Y-%m-%d %H:%M:%S")
+                        if ts > datetime.now(): continue
+                    else:
+                        ts = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
                     if ts < cutoff: continue
                     events.append({
                         "rule": rule_id,
