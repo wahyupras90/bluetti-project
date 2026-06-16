@@ -44,6 +44,7 @@ state = {
 }
 
 _last_trigger = {f"A{i}": 0.0 for i in ["1", "1b", "2", "3", "4", "5", "6", "7"]}
+_a6_triggered = False
 _timers = {"A2": None, "A4": None, "A7": None}
 
 def now_sec(): return time.time()
@@ -69,7 +70,7 @@ def check_timer(rule, condition, duration_sec):
     return False
 
 def write_log(rule_id, rule_name, detail_lines, action):
-    ts = datetime.now().strftime("%H:%M:%S")
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     header = f"[{ts}] {rule_id} {rule_name}"
     log.info(header)
     for line in detail_lines: log.info(f"  {line}")
@@ -99,6 +100,7 @@ def trigger(rule_id, name, details, action, val):
 # EVALUASI RULE
 # ================================================================
 def check_rules():
+    global _a6_triggered
     if is_paused(): return
     if datetime.now().year < 2026:
         log.warning("JAM TIDAK VALID — belum sync NTP, otomasi dibekukan")
@@ -115,20 +117,22 @@ def check_rules():
         return
 
     # 2. FASE MALAM / OUTAGE
-    if grid is not None and grid < 200 and is_malam and soc >= 41:
+    if grid is not None and grid < 150 and is_malam and soc >= 41:
         if ac_is_off() and debounce_ok("A6"):
+            _a6_triggered = True
             trigger("A6", "GRID DOWN", [f"GRID={grid:.0f}V", f"SOC={soc:.0f}%"], "AC ON", "ON")
         return
 
-    if check_timer("A7", grid is not None and grid >= 215 and is_malam and ac_is_on(), 30):
+    if check_timer("A7", grid is not None and grid >= 200 and is_malam and ac_is_on() and _a6_triggered, 30):
         if debounce_ok("A7"):
+            _a6_triggered = False
             trigger("A7", "GRID UP", [f"GRID={grid:.0f}V stabil 30s"], "AC OFF", "OFF")
         return
 
-    if is_malam and soc < 61:
+    if is_malam and soc < 81:
         grid_aman = (grid is None or grid >= 200)
         if ac_is_on() and debounce_ok("A5") and grid_aman:
-            trigger("A5", "NIGHT OFF", [f"SOC={soc:.0f}% < 61%"], "AC OFF", "OFF")
+            trigger("A5", "NIGHT OFF", [f"SOC={soc:.0f}% < 81%"], "AC OFF", "OFF")
         return
 
     # 3. KICKSTART PAGI
