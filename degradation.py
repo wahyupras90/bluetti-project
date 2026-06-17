@@ -177,5 +177,27 @@ def main():
     print(f"  ✓ SOC {stats['soc_start']}% → {stats['soc_end']}%")
     print(f"  ✓ {deg_str}")
 
+    # Simpan ke JSON untuk dashboard
+    import json as _json
+    json_file = os.path.expanduser("~/bluetti_degradation.json")
+    health_pct = round(stats["eff_capacity"] / 2048 * 100, 1)
+    result = {
+        "timestamp": now.isoformat(),
+        "soc_start": stats["soc_start"], "soc_end": stats["soc_end"],
+        "delta_soc": stats["delta_soc"], "duration_h": round(stats["duration_min"]/60, 2),
+        "avg_load_w": stats["avg_load"], "energy_wh": round(stats["avg_load"] * stats["duration_min"]/60, 1),
+        "cap_eff_wh": stats["eff_capacity"], "nominal_wh": 2048,
+        "health_pct": health_pct, "count": stats["valid_points"]
+    }
+    history = []
+    if os.path.exists(json_file):
+        try:
+            with open(json_file) as f: history = _json.load(f).get("history", [])
+        except: pass
+    history.append(result)
+    with open(json_file, "w") as f:
+        _json.dump({"latest": result, "history": history}, f, indent=2)
+    print(f"  ✓ JSON tersimpan ({len(history)} pengukuran)")
+
 if __name__ == "__main__":
     main()
