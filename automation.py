@@ -43,7 +43,7 @@ state = {
     "soc": None, "pv": None, "ac_out": None, "grid_v": None, "ac_on": None,
 }
 
-_last_trigger = {f"A{i}": 0.0 for i in ["1", "1b", "2", "3", "4", "4p", "4s", "5", "6", "7"]}
+_last_trigger = {f"A{i}": 0.0 for i in ["1", "1b", "2", "3", "4", "4s", "5", "6", "7"]}
 _a6_triggered = False
 _a4p_triggered = False
 _timers = {"A2": None, "A4": None, "A7": None}
@@ -148,10 +148,6 @@ def check_rules():
         return
 
     # 4. FASE SIANG: PEMUTUS (OFF)
-    if is_time_range("06:30", "11:30") and soc <= 45:
-        if ac_is_on() and debounce_ok("A4p"):
-            _a4p_triggered = True; trigger("A4p", "MORN OFF", [f"SOC={soc:.0f}% <= 45%"], "AC OFF", "OFF")
-        return
 
     if is_time_range("11:30", "15:30") and ac_is_on() and (pv is not None) and (ac_out is not None):
         a4_siang_cond = (soc <= 60) and (pv < ac_out)
