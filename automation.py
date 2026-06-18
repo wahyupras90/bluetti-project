@@ -45,6 +45,7 @@ state = {
 
 _last_trigger = {f"A{i}": 0.0 for i in ["1", "1b", "2", "3", "4", "4p", "4s", "5", "6", "7"]}
 _a6_triggered = False
+_a4p_triggered = False
 _timers = {"A2": None, "A4": None, "A7": None}
 
 def now_sec(): return time.time()
@@ -136,12 +137,12 @@ def check_rules():
         return
 
     # 3. KICKSTART PAGI
-    if is_time_range("06:00", "06:05") and soc >= 65:
+    if is_time_range("06:00", "06:05") and soc >= 65 and not _a4p_triggered:
         if ac_is_off() and debounce_ok("A1b"):
             trigger("A1b", "START 06", [f"SOC={soc:.0f}% (>= 65)"], "AC ON", "ON")
         return
 
-    if is_time_range("07:00", "07:05") and (45 < soc < 65):
+    if is_time_range("07:00", "07:05") and (45 < soc < 65) and not _a4p_triggered:
         if ac_is_off() and debounce_ok("A1"):
             trigger("A1", "START 07", [f"SOC={soc:.0f}% (46 - 64)"], "AC ON", "ON")
         return
@@ -149,7 +150,7 @@ def check_rules():
     # 4. FASE SIANG: PEMUTUS (OFF)
     if is_time_range("06:30", "11:30") and soc <= 45:
         if ac_is_on() and debounce_ok("A4p"):
-            trigger("A4p", "MORN OFF", [f"SOC={soc:.0f}% <= 45%"], "AC OFF", "OFF")
+            _a4p_triggered = True; trigger("A4p", "MORN OFF", [f"SOC={soc:.0f}% <= 45%"], "AC OFF", "OFF")
         return
 
     if is_time_range("11:30", "15:30") and ac_is_on() and (pv is not None) and (ac_out is not None):
@@ -163,6 +164,9 @@ def check_rules():
 
     # 5. FASE SIANG: RECOVERY (ON)
     if is_time_range("06:30", "15:30"):
+        # Reset a4p flag saat SOC sudah >= 65
+        if soc >= 65:
+            _a4p_triggered = False
         a3_cond = False
         if is_time_range("06:30", "11:30"):
             a3_cond = (soc > 65)
