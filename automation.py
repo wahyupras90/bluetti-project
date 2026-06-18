@@ -101,7 +101,7 @@ def trigger(rule_id, name, details, action, val):
 # EVALUASI RULE
 # ================================================================
 def check_rules():
-    global _a6_triggered
+    global _a6_triggered, _a4p_triggered
     if is_paused(): return
     if datetime.now().year < 2026:
         log.warning("JAM TIDAK VALID — belum sync NTP, otomasi dibekukan")
