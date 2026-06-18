@@ -149,14 +149,13 @@ def check_rules():
 
     # 4. FASE SIANG: PEMUTUS (OFF)
 
-    if is_time_range("11:30", "15:30") and ac_is_on() and (pv is not None) and (ac_out is not None):
-        a4_siang_cond = (soc <= 60) and (pv < ac_out)
-        if check_timer("A4", a4_siang_cond, 900):
+    if is_time_range("11:30", "15:30") and ac_is_on():
+        if check_timer("A4", soc <= 75, 600):
             if debounce_ok("A4s"):
-                trigger("A4s", "DAY OFF", [f"SOC={soc:.0f}% <= 60%", f"PV={pv:.0f}W < LOAD={ac_out:.0f}W"], "AC OFF", "OFF")
+                trigger("A4s", "DAY OFF", [f"SOC={soc:.0f}% <= 75% selama 10m"], "AC OFF", "OFF")
             return
     else:
-        check_timer("A4", False, 900)
+        check_timer("A4", False, 600)
 
     # 5. FASE SIANG: RECOVERY (ON)
     if is_time_range("06:30", "15:30"):
