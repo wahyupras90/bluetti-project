@@ -46,6 +46,7 @@ state = {
 _last_trigger = {f"A{i}": 0.0 for i in ["1", "1b", "2", "3", "4", "4s", "5", "6", "7"]}
 _a6_triggered = False
 _a4p_triggered = False
+_a4s_triggered = False
 _timers = {"A2": None, "A4": None, "A7": None}
 
 def now_sec(): return time.time()
@@ -101,7 +102,7 @@ def trigger(rule_id, name, details, action, val):
 # EVALUASI RULE
 # ================================================================
 def check_rules():
-    global _a6_triggered, _a4p_triggered
+    global _a6_triggered, _a4p_triggered, _a4s_triggered
     if is_paused(): return
     if datetime.now().year < 2026:
         log.warning("JAM TIDAK VALID — belum sync NTP, otomasi dibekukan")
@@ -152,21 +153,23 @@ def check_rules():
     if is_time_range("11:30", "15:30") and ac_is_on():
         if check_timer("A4", soc <= 75, 600):
             if debounce_ok("A4s"):
-                trigger("A4s", "DAY OFF", [f"SOC={soc:.0f}% <= 75% selama 10m"], "AC OFF", "OFF")
+                _a4s_triggered = True; trigger("A4s", "DAY OFF", [f"SOC={soc:.0f}% <= 75% selama 10m"], "AC OFF", "OFF")
             return
     else:
         check_timer("A4", False, 600)
 
     # 5. FASE SIANG: RECOVERY (ON)
     if is_time_range("06:30", "15:30"):
-        # Reset a4p flag saat SOC sudah >= 65
+        # Reset flags
         if soc >= 65:
             _a4p_triggered = False
+        if soc >= 90:
+            _a4s_triggered = False
         a3_cond = False
         if is_time_range("06:30", "11:30"):
             a3_cond = (soc > 65)
         else:
-            a3_cond = (soc > 65 and pv is not None and pv > 200) or (soc > 75)
+            a3_cond = ((soc > 65 and pv is not None and pv > 200) or (soc > 75)) and not _a4s_triggered
         if a3_cond:
             if ac_is_off() and debounce_ok("A3"):
                 trigger("A3", "DAY ON", [f"SOC={soc:.0f}%"], "AC ON", "ON")
