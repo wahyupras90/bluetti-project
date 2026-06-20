@@ -115,7 +115,7 @@ def check_rules():
     # 1. PROTEKSI ABSOLUT
     if check_timer("A2", soc <= 40, 30):
         if ac_is_on() and debounce_ok("A2"):
-            trigger("A2", "BATT LOW", [f"SOC={soc:.0f}% stabil 30s"], "AC OFF", "OFF")
+            _a6_triggered = False; trigger("A2", "BATT LOW", [f"SOC={soc:.0f}% stabil 30s"], "AC OFF", "OFF")
         return
 
     # 2. FASE MALAM / OUTAGE
