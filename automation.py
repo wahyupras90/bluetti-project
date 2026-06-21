@@ -140,9 +140,9 @@ def check_rules():
         return
 
     # 3. KICKSTART PAGI
-    if is_time_range("06:00", "06:05") and soc >= 65:
+    if is_time_range("06:00", "06:05") and soc >= 55:
         if ac_is_off() and debounce_ok("A1b"):
-            trigger("A1b", "START 06", [f"SOC={soc:.0f}% (>= 65)"], "AC ON", "ON")
+            trigger("A1b", "START 06", [f"SOC={soc:.0f}% (>= 55)"], "AC ON", "ON")
         return
 
     if is_time_range("07:00", "07:05") and (45 < soc < 65):
@@ -167,7 +167,7 @@ def check_rules():
             _a4s_triggered = False
         a3_cond = False
         if is_time_range("06:30", "11:30"):
-            a3_cond = (soc > 65)
+            a3_cond = (soc >= 55)
         else:
             a3_cond = ((soc > 65 and pv is not None and pv > 200) or (soc > 75)) and not _a4s_triggered
         if a3_cond:
