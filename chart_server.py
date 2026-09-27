@@ -508,10 +508,24 @@ def load_degradation():
     except:
         return None
 
+def downsample(rows, max_points=300):
+    """Downsample rows ke max_points dengan rata-rata."""
+    if len(rows) <= max_points:
+        return rows
+    step = len(rows) / max_points
+    result = []
+    for i in range(max_points):
+        idx = int(i * step)
+        result.append(rows[idx])
+    return result
+
 def get_chart(hours, label):
     rows  = load_csv(hours)
     rules = load_rules(hours)
     s     = calc_summary(rows)
+    # Downsample untuk periode panjang
+    max_pts = 120 if hours >= 720 else 200 if hours >= 168 else 300
+    rows = downsample(rows, max_pts)
     return {
         "labels": [r["ts"] for r in rows],
         "soc":    [r["soc"] for r in rows],
@@ -532,9 +546,9 @@ HTML = r"""<!DOCTYPE html>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bluetti</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
+<script src="/static/chart.min.js"></script>
+<script src="/static/hammer.min.js"></script>
+<script src="/static/zoom.min.js"></script>
 <style>
 .weather-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
 .weather-btn{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:12px 10px;cursor:pointer;transition:all 0.15s}
@@ -1099,7 +1113,7 @@ window.showGraphView=function(){
   var btn=document.getElementById('btn-chart-toggle');if(btn){btn.textContent='← Back to Energy Flow';btn.style.background='#1e293b';btn.style.borderColor='#334155';btn.style.color='#94a3b8';}
   _stop();
   if(window.chart){try{window.chart.options.plugins.zoom.pan.enabled=true;window.chart.update('none');}catch(e){}}
-  if(!window.chart)loadChart(24,'1D',document.querySelector('.btn-period.active'));
+  loadChart(24,'1D',document.querySelector('.btn-period.active'));
 };
 window.initFlow=function(){
   cv=document.getElementById('flowCv');
@@ -1501,7 +1515,7 @@ function buildChart(data) {
         },
       },
     },
-    plugins:[ruleBandPlugin, cursorPlugin],
+    plugins:[],  // DEBUG
   });
 
   // Touch: tap = tooltip
@@ -1593,7 +1607,12 @@ async function loadChart(hours, label, btn) {
     const r = await fetch(`/api/chart?hours=${hours}&label=${label}`);
     const d = await r.json();
     currentRules = d.rules;
-    buildChart(d);
+    console.log('buildChart data:', d.labels.length, 'points', 'soc:', d.soc[0]);
+    try {
+      buildChart(d);
+    } catch(e) {
+      document.getElementById('mainChart').insertAdjacentHTML('afterend', '<div style="color:red;padding:10px">ERROR: '+e.message+'</div>');
+    }
     renderHealth(d.degradation);
     document.getElementById('sum-title').textContent  = `ENERGY SUMMARY — ${label}`;
     document.getElementById('sum-pv').textContent     = `${d.summary.pv} kWh`;
@@ -1684,6 +1703,19 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length",str(len(b)))
             self.end_headers(); self.wfile.write(b)
 
+        elif self.path.startswith("/static/"):
+            fname = self.path[8:]
+            fpath = os.path.expanduser(f'~/static/{fname}')
+            if os.path.exists(fpath):
+                with open(fpath,'rb') as body: data=body.read()
+                self.send_response(200)
+                self.send_header('Content-Type','application/javascript')
+                self.end_headers()
+                self.wfile.write(data)
+            else:
+                self.send_response(404)
+                self.end_headers()
+            return
         elif self.path == "/api/status":
             b = json.dumps(get_status()).encode("utf-8")
             self.send_response(200)
