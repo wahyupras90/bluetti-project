@@ -69,9 +69,30 @@ def trim_log(path, max_mb):
     except Exception as e:
         print(f"[logrotate] ERROR trim LOG: {e}")
 
+def trim_csv_by_age(path, max_days=30):
+    """Hapus data CSV lebih dari max_days hari."""
+    if not os.path.exists(path): return
+    from datetime import timedelta
+    cutoff = datetime.now() - timedelta(days=max_days)
+    cutoff_str = cutoff.strftime("%Y-%m-%d")
+    try:
+        with open(path, "r") as f:
+            lines = f.readlines()
+        header = lines[0] if lines else ""
+        data = [l for l in lines[1:] if l[:10] >= cutoff_str]
+        removed = len(lines) - 1 - len(data)
+        if removed > 0:
+            with open(path, "w") as f:
+                f.write(header)
+                f.writelines(data)
+            print(f"[logrotate] CSV age trim: {removed} baris > {max_days} hari dihapus")
+    except Exception as e:
+        print(f"[logrotate] ERROR trim age: {e}")
+
 if __name__ == "__main__":
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[logrotate] {ts}")
+    trim_csv_by_age(CSV_FILE, 30)
     trim_csv(CSV_FILE, CSV_MAX_MB)
     trim_log(LOG_FILE, LOG_MAX_MB)
     print(f"[logrotate] done")
